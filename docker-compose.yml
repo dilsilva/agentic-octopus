@@ -1,0 +1,56 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: octo
+      POSTGRES_PASSWORD: octo
+      POSTGRES_DB: octo
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U octo -d octo"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  migrate:
+    build: .
+    command: python -m octo.db upgrade
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://octo:octo@postgres:5432/octo
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://octo:octo@postgres:5432/octo
+    volumes:
+      - ./agents:/app/agents:ro
+      - ./data:/app/data
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  worker:
+    build: .
+    command: python -m octo.worker.main
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://octo:octo@postgres:5432/octo
+    volumes:
+      - ./agents:/app/agents:ro
+      - ./data:/app/data
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  pgdata:

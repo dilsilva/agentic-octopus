@@ -1,0 +1,46 @@
+# Lint + test only. NO deploy stages — deploys will be added behind an explicit
+# consent gate in the GCP phase (see docs/rfcs/0001, rollout plan).
+
+stages:
+  - lint
+  - test
+
+default:
+  image: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+  cache:
+    key: uv-$CI_COMMIT_REF_SLUG
+    paths:
+      - .uv-cache/
+  before_script:
+    - export UV_CACHE_DIR=.uv-cache
+
+lint:
+  stage: lint
+  script:
+    - uv sync --frozen
+    - uv run ruff check .
+    - uv run ruff format --check .
+
+unit:
+  stage: test
+  script:
+    - uv sync --frozen
+    - uv run pytest tests/unit -q
+
+# Runs only once integration tests exist (M1); uses a real pgvector service.
+integration:
+  stage: test
+  services:
+    - name: pgvector/pgvector:pg16
+      alias: postgres
+  variables:
+    POSTGRES_USER: octo
+    POSTGRES_PASSWORD: octo
+    POSTGRES_DB: octo
+    TEST_DATABASE_URL: postgresql://octo:octo@postgres:5432/octo
+  script:
+    - uv sync --frozen
+    - uv run pytest tests/integration -q
+  rules:
+    - exists:
+        - tests/integration/**/*.py

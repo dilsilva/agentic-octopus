@@ -26,8 +26,7 @@ async def tick(pool: AsyncConnectionPool) -> int:
     async with pool.connection() as conn:
         cur = conn.cursor(row_factory=dict_row)
         await cur.execute(
-            "SELECT * FROM schedules WHERE enabled AND next_run_at <= now() "
-            "FOR UPDATE SKIP LOCKED"
+            "SELECT * FROM schedules WHERE enabled AND next_run_at <= now() FOR UPDATE SKIP LOCKED"
         )
         due = await cur.fetchall()
         for s in due:

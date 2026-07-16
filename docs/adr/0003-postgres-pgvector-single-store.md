@@ -1,6 +1,6 @@
 # ADR-0003: Postgres + pgvector is the only backing store
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-07-15
 - **Deciders:** Diego
 - **Related:** RFC-0001, ADR-0004

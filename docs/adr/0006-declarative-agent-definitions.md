@@ -1,6 +1,6 @@
 # ADR-0006: Agents are declarative directories, not code registrations
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-07-15
 - **Deciders:** Diego
 - **Related:** RFC-0001, ADR-0002
@@ -14,10 +14,12 @@ surface and blast radius.
 ## Decision
 
 We will define each agent as a directory `agents/<name>/` containing `agent.yaml` (name, tools
-allowlist, model, max_turns, requires_approval, default schedule, params, output dir) and
-`prompt.md` (system prompt). A registry validates manifests with pydantic at startup and maps
-them to `ClaudeAgentOptions` (with `setting_sources=[]` to isolate server runs). Adding an app
-is two files; the core does not change.
+allowlist, **executor** and **model** — provider-agnostic: `claude-sdk` is the default executor,
+OpenRouter-style executors select any model dynamically once present (Diego, 2026-07-16) —
+max_turns, requires_approval, default schedule, params, output dir) and `prompt.md` (system
+prompt). A registry validates manifests with pydantic at startup and maps them to the chosen
+executor's options (for claude-sdk: `ClaudeAgentOptions` with `setting_sources=[]` to isolate
+server runs). Adding an app is two files; the core does not change.
 
 ## Options considered
 

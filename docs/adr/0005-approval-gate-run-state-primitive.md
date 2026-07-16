@@ -1,6 +1,6 @@
 # ADR-0005: Approval gates are a durable run-state primitive
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-07-15
 - **Deciders:** Diego
 - **Related:** RFC-0001, skills/preflight (the philosophy being encoded)

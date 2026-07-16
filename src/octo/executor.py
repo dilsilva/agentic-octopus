@@ -1,0 +1,110 @@
+"""Agent execution behind a Protocol (ADR-0002).
+
+The spine is provider-pluggable: ClaudeSDKExecutor is the primary implementation;
+an OpenRouter-style executor lands in P2.5. Tests always use FakeExecutor — the
+real SDK is never called in the test suite (CLAUDE.md hard rule).
+"""
+
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Literal, Protocol
+
+from octo.registry import LoadedAgent
+
+OnEvent = Callable[[str, dict[str, Any]], Awaitable[None]]
+
+
+@dataclass
+class ExecOutcome:
+    status: Literal["completed", "failed"]
+    result: str | None = None
+    error: str | None = None
+    cost_usd: float | None = None
+    session_id: str | None = None
+
+
+class AgentExecutor(Protocol):
+    async def execute(
+        self, run: dict[str, Any], agent: LoadedAgent, workdir: Path, on_event: OnEvent
+    ) -> ExecOutcome: ...
+
+
+@dataclass
+class FakeExecutor:
+    """Deterministic executor for tests: returns canned outcomes per agent name."""
+
+    outcomes: dict[str, ExecOutcome] = field(default_factory=dict)
+    default: ExecOutcome = field(default_factory=lambda: ExecOutcome("completed", result="fake"))
+    calls: list[dict[str, Any]] = field(default_factory=list)
+
+    async def execute(
+        self, run: dict[str, Any], agent: LoadedAgent, workdir: Path, on_event: OnEvent
+    ) -> ExecOutcome:
+        self.calls.append({"run_id": str(run["id"]), "agent": agent.manifest.name})
+        await on_event("log", {"msg": "fake executor ran"})
+        return self.outcomes.get(agent.manifest.name, self.default)
+
+
+class ClaudeSDKExecutor:
+    """Primary executor: headless Claude Agent SDK session (imported lazily so the
+    package is only required where agents actually run)."""
+
+    async def execute(
+        self, run: dict[str, Any], agent: LoadedAgent, workdir: Path, on_event: OnEvent
+    ) -> ExecOutcome:
+        from claude_agent_sdk import (  # noqa: PLC0415 - lazy by design
+            AssistantMessage,
+            ClaudeAgentOptions,
+            ResultMessage,
+            TextBlock,
+            ToolUseBlock,
+            query,
+        )
+
+        m = agent.manifest
+        options = ClaudeAgentOptions(
+            system_prompt=agent.prompt,
+            allowed_tools=list(m.tools),
+            max_turns=m.max_turns,
+            cwd=str(workdir),
+            setting_sources=[],  # server runs are isolated from filesystem Claude settings
+            permission_mode="bypassPermissions",  # headless: the manifest allowlist IS the gate
+            **({"model": m.model} if m.model != "default" else {}),
+        )
+        prompt = (
+            "Execute your task now. Run parameters (JSON):\n"
+            f"{run.get('params') or m.params}\n"
+            f"Write outputs into the current working directory."
+        )
+        outcome = ExecOutcome(status="failed", error="executor produced no result")
+        async for message in query(prompt=prompt, options=options):
+            if isinstance(message, AssistantMessage):
+                for block in message.content:
+                    if isinstance(block, TextBlock):
+                        await on_event("message", {"text": block.text[:2000]})
+                    elif isinstance(block, ToolUseBlock):
+                        await on_event(
+                            "tool_use", {"tool": block.name, "input": _clip(block.input)}
+                        )
+            elif isinstance(message, ResultMessage):
+                ok = message.subtype == "success"
+                outcome = ExecOutcome(
+                    status="completed" if ok else "failed",
+                    result=message.result if ok else None,
+                    error=None if ok else f"sdk result subtype: {message.subtype}",
+                    cost_usd=message.total_cost_usd,
+                    session_id=message.session_id,
+                )
+        return outcome
+
+
+def _clip(value: Any, limit: int = 500) -> Any:
+    s = str(value)
+    return s if len(s) <= limit else s[:limit] + "…"
+
+
+def get_executor(name: str) -> AgentExecutor:
+    if name == "claude-sdk":
+        return ClaudeSDKExecutor()
+    raise ValueError(f"no executor registered for '{name}'")

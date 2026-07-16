@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     log_level: str = "info"
     worker_concurrency: int = 1
     scheduler_enabled: bool = True
+    agents_dir: str = "agents"
+    data_dir: str = "data"
 
 
 settings = Settings()

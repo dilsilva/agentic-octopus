@@ -10,7 +10,8 @@ directory under `agents/`. Vision and full design: `docs/rfcs/0001-agentic-octop
 trigger (API / schedule / later: webhook, chat)
   → runs row inserted (status=queued; the run row IS the queue item)
   → worker claims via FOR UPDATE SKIP LOCKED (lease + heartbeat; reaper requeues crashes)
-  → Claude Agent SDK session (tools from agent.yaml allowlist; setting_sources=[])
+  → executor runs the agent (AgentExecutor protocol; primary: Claude Agent SDK session with
+    tools from agent.yaml allowlist + setting_sources=[]; provider-pluggable — ADR-0002)
   → events/result/cost_usd/session_id persisted (run_events = audit trail)
   → gates: requires_approval parks run in awaiting_approval until human approves (CLI/API)
 ```

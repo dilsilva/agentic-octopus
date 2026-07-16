@@ -1,6 +1,6 @@
 # ADR-0001: Build the spine as a single orchestration service
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-07-15
 - **Deciders:** Diego
 - **Related:** RFC-0001

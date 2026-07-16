@@ -1,6 +1,6 @@
 # RFC-0001: agentic-octopus — the spine for personal agentic applications
 
-- **Status:** draft
+- **Status:** decided (2026-07-16 — ADRs 0001–0006 accepted; 0002/0006 amended for multi-provider executors)
 - **Author:** Diego Silva   **Date:** 2026-07-15
 - **Reviewers/Decider:** Decider: Diego (owner-decided mode)
 - **Related:** ADR-0001..0006, `skills/` (working discipline this system inherits)
@@ -97,10 +97,16 @@ flowchart LR
 - **Scheduler:** an asyncio task inside the worker (one fewer container). Every 30s, claim due
   `schedules` rows (`FOR UPDATE SKIP LOCKED` again), insert a run, compute `next_run_at` via
   croniter — atomic, so N workers never double-fire.
-- **Agent definitions (ADR-0006):** `agent.yaml` (name, tools allowlist, max_turns,
-  requires_approval, default schedule, params, output dir) + `prompt.md` (system prompt).
-  Validated by pydantic at startup; mapped to `ClaudeAgentOptions` with `setting_sources=[]`
-  so server runs are isolated from any filesystem Claude settings.
+- **Agent definitions (ADR-0006):** `agent.yaml` (name, tools allowlist, **executor + model**,
+  max_turns, requires_approval, default schedule, params, output dir) + `prompt.md` (system
+  prompt). Validated by pydantic at startup; mapped to the chosen executor's options (for
+  claude-sdk: `ClaudeAgentOptions` with `setting_sources=[]` so server runs are isolated from
+  any filesystem Claude settings).
+- **Executors (ADR-0002, amended 2026-07-16):** execution sits behind an `AgentExecutor`
+  protocol. `claude-sdk` is the primary (tools, permissions, session resume); an
+  OpenRouter/LiteLLM-style executor is a planned phase (P2.5) so agents can select any
+  provider's model dynamically via `executor:`/`model:` in their manifest. Non-SDK executors
+  support pre-execution gates only until they bring their own pause/resume.
 - **Consent gates (ADR-0005), two tiers:**
   - *M1 — pre-execution:* `requires_approval: true` → on claim, insert pending `approvals` row,
     park run in `awaiting_approval`. Approve (CLI/API) flips it back to `queued`.
@@ -180,6 +186,8 @@ by a single guard function, not scattered UPDATEs.
   4. worker loop + scheduler + pre-execution gates;
   5. CLI + research-brief live + smoke evidence in worklog.
 - **P2:** inbound webhooks (`POST /hooks/{source}`, HMAC) + mid-run gates via MCP tool + resume.
+- **P2.5:** OpenRouter executor — provider-agnostic model selection per agent manifest
+  (pre-execution gates only at first; see ADR-0002).
 - **P3:** Telegram bot — deliver briefs, inline approve/reject buttons on the same approvals API.
 - **P4:** ⚠️ **GCP deploy (consent gate — first prod-touching step):** Cloud Run (api, worker),
   Cloud SQL Postgres + pgvector, Secret Manager; CI gains a deploy stage gated on manual action.
@@ -189,15 +197,15 @@ by a single guard function, not scattered UPDATEs.
 
 ## Decisions
 
-- [ ] **Run-row-as-queue-item** (no jobs table) — *recommended: yes; one source of truth, the
+- [x] **Run-row-as-queue-item** (no jobs table) — *recommended: yes; one source of truth, the
   queue poll is one indexed query.*
-- [ ] **Scheduler inside the worker process** (no third service) — *recommended: yes at this
+- [x] **Scheduler inside the worker process** (no third service) — *recommended: yes at this
   scale; split it out only if worker crashes start eating schedule ticks.*
-- [ ] **Agent format = YAML manifest + prompt.md** with optional per-agent `hooks.py` escape
+- [x] **Agent format = YAML manifest + prompt.md** with optional per-agent `hooks.py` escape
   hatch later — *recommended: yes; declarative keeps onboarding two files.*
-- [ ] **Raw SQL + numbered migrations** (no ORM/Alembic) — *recommended: yes; the queue is raw
+- [x] **Raw SQL + numbered migrations** (no ORM/Alembic) — *recommended: yes; the queue is raw
   SQL anyway; fall back to Alembic if migrations get painful.*
-- [ ] **Make over just** — *recommended: yes; preinstalled everywhere you migrate.*
+- [x] **Make over just** — *recommended: yes; preinstalled everywhere you migrate.*
 
 ## Glossary
 

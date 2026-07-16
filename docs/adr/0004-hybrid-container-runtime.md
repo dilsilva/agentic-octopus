@@ -1,6 +1,6 @@
 # ADR-0004: Hybrid container runtime — compose-first, Cloud Run later, no Kubernetes
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-07-15
 - **Deciders:** Diego
 - **Related:** RFC-0001, ADR-0003

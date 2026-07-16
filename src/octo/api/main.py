@@ -1,11 +1,14 @@
-"""FastAPI gateway. M0 ships /healthz only; run/approval/schedule routes land in M1."""
+"""FastAPI gateway: /healthz (open) + authenticated agent/run/schedule routes."""
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 
 from octo import __version__, db
+from octo.api.routes import router
 from octo.config import settings
+from octo.registry import load_registry
 
 
 @asynccontextmanager
@@ -16,6 +19,7 @@ async def lifespan(app: FastAPI):
         app.state.pool = await db.create_pool(settings.database_url)
     except Exception:
         app.state.pool = None
+    app.state.registry = load_registry(Path(settings.agents_dir))
     yield
     if app.state.pool is not None:
         await app.state.pool.close()
@@ -23,6 +27,7 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     app = FastAPI(title="agentic-octopus", version=__version__, lifespan=lifespan)
+    app.include_router(router)
 
     @app.get("/healthz")
     async def healthz():

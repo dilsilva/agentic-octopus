@@ -3,8 +3,9 @@
 
 name: research-brief
 description: Daily research brief on configured topics, written as a markdown file
-tools: [WebSearch, WebFetch, Read, Write]   # -> ClaudeAgentOptions.allowed_tools
-model: default
+tools: [WebSearch, WebFetch, Read, Write]   # -> the executor's tool allowlist
+executor: claude-sdk                        # ADR-0002: provider-pluggable (openrouter later)
+model: default                              # provider model id once non-default
 max_turns: 30
 requires_approval: false                    # read-only agent: no consent gate needed
 schedule: "0 7 * * *"                       # default cadence; `octo schedule sync` upserts to DB (M1)

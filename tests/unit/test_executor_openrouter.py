@@ -97,6 +97,36 @@ async def test_embedded_error_fails_cleanly(tmp_path, events, api_key):
     assert "model overloaded" in outcome.error
 
 
+async def test_paid_model_refused_by_default(tmp_path, events, api_key):
+    _, on_event = events
+    outcome = await OpenRouterExecutor().execute(
+        {"id": "r1", "params": {}},
+        make_agent(model="anthropic/claude-sonnet-5"),
+        tmp_path,
+        on_event,
+    )
+    assert outcome.status == "failed"
+    assert "OPENROUTER_ALLOW_PAID" in outcome.error
+    assert list(tmp_path.glob("*.md")) == []
+
+
+@respx.mock
+async def test_paid_model_allowed_when_opted_in(tmp_path, events, api_key, monkeypatch):
+    _, on_event = events
+    monkeypatch.setattr(settings, "openrouter_allow_paid", True)
+    respx.post(OR_URL).mock(
+        return_value=httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]})
+    )
+    outcome = await OpenRouterExecutor().execute(
+        {"id": "r1", "params": {}},
+        make_agent(model="anthropic/claude-sonnet-5"),
+        tmp_path,
+        on_event,
+    )
+    assert outcome.status == "completed"
+    assert outcome.cost_usd is None  # paid model: cost unknown, NOT claimed to be zero
+
+
 async def test_missing_key_fails_without_calling_api(tmp_path, events, monkeypatch):
     _, on_event = events
     monkeypatch.setattr(settings, "openrouter_api_key", "")

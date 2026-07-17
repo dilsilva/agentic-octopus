@@ -11,6 +11,8 @@ class Settings(BaseSettings):
     openrouter_api_key: str = ""
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
     openrouter_default_model: str = "nvidia/nemotron-3-super-120b-a12b:free"
+    # Hard cost guard: only :free models are allowed until explicitly flipped.
+    openrouter_allow_paid: bool = False
     octo_api_token: str = "change-me"
     octo_api_url: str = "http://localhost:8000"
     octo_env: str = "local"

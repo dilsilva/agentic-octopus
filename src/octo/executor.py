@@ -119,6 +119,15 @@ class OpenRouterExecutor:
 
         m = agent.manifest
         model = m.model if m.model != "default" else settings.openrouter_default_model
+        # Cost guard: refuse anything that could bill until the operator opts in.
+        if not model.endswith(":free") and not settings.openrouter_allow_paid:
+            return ExecOutcome(
+                status="failed",
+                error=(
+                    f"model '{model}' is not a :free variant and OPENROUTER_ALLOW_PAID "
+                    "is off — refusing to run a potentially billable request"
+                ),
+            )
         params = run.get("params") or m.params
         user_msg = (
             "Execute your task now, in a single response. Run parameters (JSON):\n"

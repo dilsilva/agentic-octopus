@@ -5,6 +5,7 @@ plus a final custom event carrying the persisted message id — so the CLI, Tele
 and the dashboard (P6) all parse the same format as /v1."""
 
 import json
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -12,7 +13,9 @@ from pydantic import BaseModel
 
 from octo import chat
 from octo.api.auth import require_chat_token
-from octo.providers.openrouter import PaidModelRefused, QuotaExceeded
+from octo.providers.openrouter import PaidModelRefused, ProviderError, QuotaExceeded
+
+log = logging.getLogger("octo.api.chat")
 
 router = APIRouter(prefix="/chat", dependencies=[Depends(require_chat_token)])
 
@@ -79,14 +82,19 @@ async def send_message(conversation_id: str, body: MessageRequest, request: Requ
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except QuotaExceeded as exc:
         raise HTTPException(status_code=429, detail=str(exc)) from exc
+    except (ProviderError, RuntimeError) as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     async def sse():
         try:
             async for chunk in chat.send_stream(pool, registry, conversation_id, body.content):
                 yield f"data: {json.dumps(chunk)}\n\n"
             yield "data: [DONE]\n\n"
-        except (LookupError, PaidModelRefused, QuotaExceeded) as exc:
+        except Exception as exc:  # response already committed — emit a readable
+            # error event instead of cutting the stream mid-chunk
+            log.warning("chat stream failed: %s", exc)
             yield f"data: {json.dumps({'error': str(exc)})}\n\n"
+            yield "data: [DONE]\n\n"
 
     return StreamingResponse(sse(), media_type="text/event-stream")
 

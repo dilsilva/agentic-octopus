@@ -5,6 +5,7 @@ stateless — protocol clients manage their own history and send it in full each
 Only request METADATA is logged (chat_completions); never message content."""
 
 import json
+import logging
 import time
 
 from fastapi import APIRouter, Depends, Request
@@ -14,6 +15,8 @@ from octo.api.auth import require_chat_token
 from octo.config import settings
 from octo.providers.base import get_chat_provider
 from octo.providers.openrouter import PaidModelRefused, QuotaExceeded, enforce_free
+
+log = logging.getLogger("octo.api.v1")
 
 router = APIRouter(prefix="/v1", dependencies=[Depends(require_chat_token)])
 
@@ -96,8 +99,12 @@ async def chat_completions(request: Request):
                                 except json.JSONDecodeError:
                                     pass
                         yield event + b"\n\n"
-        except QuotaExceeded as exc:
+        except Exception as exc:  # stream already committed HTTP 200 — a raised
+            # exception here would cut the connection mid-chunk (client sees a
+            # TransferEncodingError); emit a readable SSE error + DONE instead.
+            log.warning("stream to provider failed: %s", exc)
             yield f"data: {json.dumps({'error': {'message': str(exc)}})}\n\n".encode()
+            yield b"data: [DONE]\n\n"
         finally:
             await _log_metadata(
                 request,

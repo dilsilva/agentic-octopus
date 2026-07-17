@@ -83,6 +83,24 @@ def test_streaming_passthrough_verbatim(client_without_db):
     assert b"[DONE]" in r.content
 
 
+@respx.mock
+def test_streaming_upstream_error_yields_clean_sse_not_dead_connection(client_without_db):
+    """Regression: OpenRouter 404 (model with no live endpoint) mid-stream used to kill
+    the chunked response (client saw TransferEncodingError). Must emit a readable SSE
+    error event + [DONE] on the already-committed 200."""
+    respx.post(OR_URL).mock(
+        return_value=httpx.Response(404, json={"error": {"message": "No endpoints found"}})
+    )
+    r = client_without_db.post(
+        "/v1/chat/completions",
+        json={"model": "dead/model:free", "messages": [], "stream": True},
+        headers=AUTH,
+    )
+    assert r.status_code == 200  # stream had already committed
+    assert b"openrouter 404" in r.content
+    assert b"[DONE]" in r.content
+
+
 def test_auth_required(client_without_db):
     assert client_without_db.get("/v1/models").status_code == 401
 

@@ -15,6 +15,14 @@ class PaidModelRefused(Exception):
     pass
 
 
+class ProviderError(Exception):
+    """Upstream provider rejected the request (e.g. model has no live endpoint)."""
+
+    def __init__(self, status: int, detail: str):
+        self.status = status
+        super().__init__(f"openrouter {status}: {detail}")
+
+
 class QuotaExceeded(Exception):
     """OpenRouter free-tier quota hit (50/day without credits, 20/min)."""
 
@@ -71,7 +79,9 @@ class OpenRouterProvider:
             ) as r:
                 if r.status_code == 429:
                     raise QuotaExceeded(QuotaExceeded.MESSAGE)
-                r.raise_for_status()
+                if r.status_code != 200:
+                    body = (await r.aread()).decode(errors="replace")[:300]
+                    raise ProviderError(r.status_code, body or "no detail")
                 yield r.aiter_bytes()
 
     async def list_models(self) -> list[str]:

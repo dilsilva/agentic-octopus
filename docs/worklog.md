@@ -3,6 +3,17 @@
 Cross-session log of actions and decisions, newest first. Facts live in topic docs/RFCs/ADRs;
 this records what we did, decided, and parked. Conventions: skills/worklog.
 
+## 2026-07-18
+
+- **Fix — streaming errors no longer kill the connection:** Open WebUI showed
+  `TransferEncodingError` when a model errored mid-stream (root cause: OpenRouter 404/429
+  for models with no live endpoint raised inside the SSE generator AFTER HTTP 200 was
+  committed). Providers now raise typed `ProviderError`; both SSE surfaces catch all
+  exceptions and emit a readable `data: {"error": ...}` + `[DONE]` instead of dying;
+  native non-stream maps provider errors to 502. Regression test added (68/68). Note:
+  some `:free` models (e.g. dolphin-venice) are flaky/demand-throttled on OpenRouter —
+  pick stable ones (nemotron default works) when a model errors.
+
 ## 2026-07-17
 
 - **NEXT UP:** fast-follows from ADR-0007 — core web-search tool loop for chat (removes

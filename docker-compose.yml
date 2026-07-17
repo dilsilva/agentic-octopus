@@ -35,6 +35,11 @@ services:
     volumes:
       - ./agents:/app/agents:ro
       - ./data:/app/data
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/healthz\", timeout=3)'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -52,5 +57,29 @@ services:
       migrate:
         condition: service_completed_successfully
 
+  # Web chat client (thin client of the spine's /v1 shim — ADR-0007).
+  # Pinned version; auto title/tag/follow-up generation disabled (each would
+  # silently burn extra free-tier requests through the shim).
+  openwebui:
+    image: ghcr.io/open-webui/open-webui:v0.10.2
+    ports:
+      - "3000:8080"
+    environment:
+      OPENAI_API_BASE_URL: http://api:8000/v1
+      OPENAI_API_KEY: ${OCTO_CHAT_TOKEN:-${OCTO_API_TOKEN:-change-me}}
+      ENABLE_OLLAMA_API: "false"
+      ENABLE_WEB_SEARCH: "true"
+      WEB_SEARCH_ENGINE: "duckduckgo"
+      ENABLE_TITLE_GENERATION: "false"
+      ENABLE_TAGS_GENERATION: "false"
+      ENABLE_FOLLOW_UP_GENERATION: "false"
+      ENABLE_RETRIEVAL_QUERY_GENERATION: "false"
+    volumes:
+      - openwebui-data:/app/backend/data
+    depends_on:
+      api:
+        condition: service_healthy
+
 volumes:
   pgdata:
+  openwebui-data:

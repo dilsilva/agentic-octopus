@@ -5,10 +5,23 @@ this records what we did, decided, and parked. Conventions: skills/worklog.
 
 ## 2026-07-17
 
-- **NEXT UP:** P2 per RFC-0001 (webhooks + mid-run gates) or first additional agent —
-  Diego to pick. Also consider: $10 OpenRouter top-up (unlocks 1000 req/day + `:online`
-  search-grounded models for a fresher brief), and rotating the OpenRouter key (it was
-  pasted into a chat session).
+- **NEXT UP:** fast-follows from ADR-0007 — core web-search tool loop for chat (removes
+  the Open WebUI capability exception), rolling summarization — or P2 (webhooks +
+  mid-run gates). Still pending: $10 OpenRouter top-up consideration, OpenRouter key
+  rotation (pasted into a chat session).
+- **Chat capability shipped (ADR-0007, plan reviewed by independent agent — 11 findings
+  incorporated):** conversations/messages spine-owned (migration 0002: CASCADE, tool
+  role + metadata reserved for tool loop, summary reserved for summarization);
+  `ChatProvider` protocol + OpenRouter provider #1 (executor refactored onto it, tests
+  unchanged); chat service with token-budget sliding window, human-readable 429 quota
+  mapping, streaming with truncated-on-disconnect persistence; native `/chat` API (one
+  SSE dialect = OpenAI chunks); `/v1` shim for protocol clients (metadata-only logging);
+  scoped `OCTO_CHAT_TOKEN` (chat surfaces only — Open WebUI never holds admin); personas
+  as agent dirs (`agents/chat-assistant/`); `octo chat` REPL/list/show/usage; Open WebUI
+  v0.10.2 pinned in compose with title/tag/follow-up generation disabled (free-tier quota
+  protection) + api healthcheck gating its startup; `make backup`. 67/67 tests.
+- **Memory saved:** Diego's core-first principle (features UI-independent, UIs thin
+  clients) → `features-core-first` in session memory.
 - **🎉 FIRST SUCCESSFUL AGENT RUN through the spine:** `research-brief` via OpenRouter free
   tier — run 1abe64f7 `completed` in 16s, cost $0.00, model
   `nvidia/nemotron-3-super-120b-a12b:free`, output `data/briefs/research-brief-2026-07-17.md`.

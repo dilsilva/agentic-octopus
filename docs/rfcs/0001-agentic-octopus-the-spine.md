@@ -191,6 +191,10 @@ by a single guard function, not scattered UPDATEs.
   output), executor writes the output file; free-tier `:free` models supported. Pre-execution
   gates only (see ADR-0002). v2 candidates: `:online` search-grounded models (needs credits),
   tool-calling loop.
+- **P3-chat:** ✅ shipped 2026-07-17 (ADR-0007). Chat as a spine capability: conversations
+  in Postgres, chat service with sliding context window + quota mapping, native `/chat`
+  API (SSE), `/v1` OpenAI-compat shim, `octo chat` CLI, Open WebUI (pinned) as web client
+  with scoped chat token. Fast-follows: core web-search tool loop, rolling summarization.
 - **P3:** Telegram bot — deliver briefs, inline approve/reject buttons on the same approvals API.
 - **P4:** ⚠️ **GCP deploy (consent gate — first prod-touching step):** Cloud Run (api, worker),
   Cloud SQL Postgres + pgvector, Secret Manager; CI gains a deploy stage gated on manual action.

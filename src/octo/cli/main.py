@@ -169,6 +169,106 @@ def schedule_toggle(schedule_id: str) -> None:
         _echo(r.json())
 
 
+chat_app = typer.Typer(
+    help="Chat with the spine (ChatGPT-style, in your terminal)", invoke_without_command=True
+)
+app.add_typer(chat_app, name="chat")
+
+
+def _print_stream(resp: httpx.Response) -> None:
+    for line in resp.iter_lines():
+        if not line.startswith("data: "):
+            continue
+        payload = line[6:].strip()
+        if payload == "[DONE]":
+            typer.echo("")
+            return
+        try:
+            chunk = json.loads(payload)
+        except json.JSONDecodeError:
+            continue
+        if chunk.get("error"):
+            typer.echo(f"\n[error] {chunk['error']}")
+            return
+        if chunk.get("done"):
+            continue
+        delta = (chunk.get("choices") or [{}])[0].get("delta", {})
+        if delta.get("content"):
+            typer.echo(delta["content"], nl=False)
+
+
+@chat_app.callback()
+def chat_repl(
+    ctx: typer.Context,
+    conversation: str | None = typer.Option(None, "--conversation", "-c", help="resume by id"),
+    persona: str | None = typer.Option(None, "--persona"),
+) -> None:
+    """Interactive chat. Commands inside: /new, /list, /quit."""
+    if ctx.invoked_subcommand is not None:
+        return
+    with _client() as c:
+        if conversation is None:
+            r = c.post("/chat/conversations", json={"persona": persona} if persona else {})
+            r.raise_for_status()
+            conversation = r.json()["id"]
+            typer.echo(f"(new conversation {conversation} — /new, /list, /quit)")
+        while True:
+            try:
+                text = typer.prompt("you", prompt_suffix=" > ")
+            except (KeyboardInterrupt, EOFError):
+                typer.echo("\nbye")
+                return
+            if text.strip() == "/quit":
+                return
+            if text.strip() == "/new":
+                conversation = c.post("/chat/conversations", json={}).json()["id"]
+                typer.echo(f"(new conversation {conversation})")
+                continue
+            if text.strip() == "/list":
+                for row in c.get("/chat/conversations").json()[:10]:
+                    typer.echo(f"{row['id']}  {row['message_count']:>3} msgs  {row['title']}")
+                continue
+            typer.echo("octo > ", nl=False)
+            with c.stream(
+                "POST",
+                f"/chat/conversations/{conversation}/messages",
+                json={"content": text, "stream": True},
+                timeout=300,
+            ) as resp:
+                if resp.status_code != 200:
+                    resp.read()
+                    typer.echo(f"[{resp.status_code}] {resp.text[:300]}")
+                    continue
+                _print_stream(resp)
+
+
+@chat_app.command("list")
+def chat_list() -> None:
+    """List conversations."""
+    with _client() as c:
+        for row in c.get("/chat/conversations").json():
+            typer.echo(
+                f"{row['id']}  {row['message_count']:>3} msgs  "
+                f"{row['updated_at'][:16]}  {row['title'] or '(untitled)'}"
+            )
+
+
+@chat_app.command("show")
+def chat_show(conversation_id: str) -> None:
+    """Print a conversation's messages."""
+    with _client() as c:
+        for m in c.get(f"/chat/conversations/{conversation_id}/messages").json():
+            typer.echo(f"\n[{m['role']}]")
+            typer.echo(m["content"])
+
+
+@chat_app.command("usage")
+def chat_usage() -> None:
+    """Today's free-tier request burn."""
+    with _client() as c:
+        _echo(c.get("/chat/usage").json())
+
+
 db_app = typer.Typer(help="Database operations (talks to the DB directly, not the API)")
 app.add_typer(db_app, name="db")
 

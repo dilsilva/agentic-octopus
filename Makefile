@@ -1,4 +1,4 @@
-.PHONY: dev down logs db-migrate psql lint fmt test test-integration smoke
+.PHONY: dev down logs db-migrate psql lint fmt test test-integration smoke backup
 
 dev:            ## bring the whole stack up (postgres, migrate, api, worker)
 	docker compose up --build -d
@@ -32,3 +32,8 @@ test-integration:
 
 smoke:          ## end-to-end sanity against a running stack
 	curl -sf http://localhost:8000/healthz | python3 -m json.tool
+
+backup:         ## dump the spine DB (stateful volumes: pgdata + openwebui-data)
+	mkdir -p backups
+	docker compose exec -T postgres pg_dump -U octo octo > backups/octo-$$(date +%Y%m%d-%H%M).sql
+	@ls -lh backups/ | tail -3

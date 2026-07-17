@@ -32,7 +32,8 @@ async def pool(migrated):
     p = await db.create_pool(migrated)
     async with p.connection() as conn:
         await conn.execute(
-            "TRUNCATE run_events, approvals, runs, schedules, memories RESTART IDENTITY CASCADE"
+            "TRUNCATE run_events, approvals, runs, schedules, memories, "
+            "messages, conversations, chat_completions RESTART IDENTITY CASCADE"
         )
     yield p
     await p.close()

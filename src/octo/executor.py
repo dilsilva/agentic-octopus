@@ -110,24 +110,24 @@ class OpenRouterExecutor:
     ) -> ExecOutcome:
         from datetime import UTC, datetime
 
-        import httpx
-
         from octo.config import settings
+        from octo.providers.openrouter import (
+            OpenRouterProvider,
+            PaidModelRefused,
+            QuotaExceeded,
+            enforce_free,
+            resolve_model,
+        )
 
         if not settings.openrouter_api_key:
             return ExecOutcome(status="failed", error="OPENROUTER_API_KEY not configured")
 
         m = agent.manifest
-        model = m.model if m.model != "default" else settings.openrouter_default_model
-        # Cost guard: refuse anything that could bill until the operator opts in.
-        if not model.endswith(":free") and not settings.openrouter_allow_paid:
-            return ExecOutcome(
-                status="failed",
-                error=(
-                    f"model '{model}' is not a :free variant and OPENROUTER_ALLOW_PAID "
-                    "is off — refusing to run a potentially billable request"
-                ),
-            )
+        model = resolve_model(m.model)
+        try:
+            enforce_free(model)
+        except PaidModelRefused as exc:
+            return ExecOutcome(status="failed", error=str(exc))
         params = run.get("params") or m.params
         user_msg = (
             "Execute your task now, in a single response. Run parameters (JSON):\n"
@@ -138,18 +138,18 @@ class OpenRouterExecutor:
         )
         await on_event("log", {"executor": "openrouter", "model": model})
 
-        async with httpx.AsyncClient(timeout=300) as client:
-            r = await client.post(
-                f"{settings.openrouter_base_url}/chat/completions",
-                headers={"Authorization": f"Bearer {settings.openrouter_api_key}"},
-                json={
+        try:
+            r = await OpenRouterProvider().complete(
+                {
                     "model": model,
                     "messages": [
                         {"role": "system", "content": agent.prompt},
                         {"role": "user", "content": user_msg},
                     ],
-                },
+                }
             )
+        except QuotaExceeded as exc:
+            return ExecOutcome(status="failed", error=str(exc))
         if r.status_code != 200:
             return ExecOutcome(status="failed", error=f"openrouter {r.status_code}: {r.text[:500]}")
         data = r.json()

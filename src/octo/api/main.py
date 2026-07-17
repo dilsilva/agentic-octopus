@@ -6,6 +6,8 @@ from pathlib import Path
 from fastapi import FastAPI
 
 from octo import __version__, db
+from octo.api.chat_routes import router as chat_router
+from octo.api.openai_compat import router as openai_router
 from octo.api.routes import router
 from octo.config import settings
 from octo.registry import load_registry
@@ -28,6 +30,8 @@ async def lifespan(app: FastAPI):
 def create_app() -> FastAPI:
     app = FastAPI(title="agentic-octopus", version=__version__, lifespan=lifespan)
     app.include_router(router)
+    app.include_router(chat_router)
+    app.include_router(openai_router)
 
     @app.get("/healthz")
     async def healthz():

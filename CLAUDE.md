@@ -36,7 +36,9 @@ approvals — gates are decided by Diego only.**
 
 ## Run / test
 
-- `make dev` (compose up), `make logs`, `make down`, `make psql`, `make db-migrate`
+- `make dev` (compose up), `make logs`, `make down`, `make psql`, `make db-migrate`, `make backup`
+- Chat: `uv run octo chat` (terminal) or Open WebUI at `localhost:3000` (web, uses the
+  scoped `OCTO_CHAT_TOKEN` — valid only on `/chat/*` + `/v1/*`, never for runs/approvals)
 - `make lint` / `make fmt` / `make test` (unit) / `make test-integration` / `make smoke`
 - CLI: `uv run octo health`, `uv run octo db upgrade` (M1 adds run/approve/logs/schedule)
 - Local setup: `cp .env.example .env` (fill `ANTHROPIC_API_KEY`), `uv sync`.
@@ -54,4 +56,6 @@ approvals — gates are decided by Diego only.**
 
 **agent** declarative definition (yaml+prompt) · **run** one execution = one queue item ·
 **gate** pending approval parking a run · **schedule** cron row enqueueing runs ·
-**brief** research-brief output in `data/briefs/` · **spine** this service.
+**brief** research-brief output in `data/briefs/` · **spine** this service ·
+**persona** agent dir used as a chat system prompt · **chat shim** `/v1` OpenAI-compat
+surface for protocol clients (Open WebUI) — a protocol namespace, not an API version.

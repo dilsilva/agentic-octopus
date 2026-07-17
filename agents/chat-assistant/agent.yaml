@@ -1,0 +1,11 @@
+# Default chat persona (ADR-0007). Conversations reference a persona by name;
+# a new persona = a new directory like this one — zero core changes (ADR-0006).
+
+name: chat-assistant
+description: Default research-assistant persona for spine chat conversations
+executor: openrouter
+model: default
+max_turns: 1                # personas are single-response; turn logic lives in the chat service
+requires_approval: false    # chat is read-only conversation
+output:
+  dir: data/chat            # unused today; reserved for save-answer-to-note fast-follow

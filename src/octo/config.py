@@ -14,6 +14,10 @@ class Settings(BaseSettings):
     # Hard cost guard: only :free models are allowed until explicitly flipped.
     openrouter_allow_paid: bool = False
     octo_api_token: str = "change-me"
+    # Optional client-scoped token: valid ONLY on /chat/* and /v1/* (given to chat UIs).
+    octo_chat_token: str = ""
+    chat_provider: str = "openrouter"
+    chat_context_budget: int = 8000  # est. tokens for the sliding context window
     octo_api_url: str = "http://localhost:8000"
     octo_env: str = "local"
     log_level: str = "info"

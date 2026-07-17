@@ -5,6 +5,26 @@ this records what we did, decided, and parked. Conventions: skills/worklog.
 
 ## 2026-07-18
 
+- **🎉 Spine deployed on treco (homelab, ARM64 RK3588 / Ubuntu 20.04):** clone at
+  `~/apps/agentic-octopus` via read-only GitLab deploy key (id 21224058, key on
+  treco `~/.ssh/id_ed25519`); `.env` copied over SSH (never via git). Open WebUI
+  remapped to **:3002** through an untracked `docker-compose.override.yml`
+  (3000 is homepage on that box; 3001 uptime-kuma). Full stack verified: healthz
+  OK, migrations applied, `octo/auto` live chat served by nemotron at $0, Open
+  WebUI answering 200 over Tailscale (`http://treco.leopard-barley.ts.net:3002`
+  — first visit creates the admin account). To update treco: `cd
+  ~/apps/agentic-octopus && git pull && docker compose up -d --build`.
+- **octo/claude virtual model shipped (commits fc90dbb, 6506150 → main):**
+  `AnthropicChatProvider` (src/octo/providers/claude.py) speaks the ChatProvider
+  protocol but calls the Anthropic Messages API via the official SDK — system
+  folding, sampling params stripped (Opus 4.8 rejects them), adaptive thinking,
+  refusal→content_filter, synthesized OpenAI SSE. New `route_chat_model()` seam
+  in providers/base.py does per-model routing + billing policy: octo/claude
+  requires a real `ANTHROPIC_API_KEY` (`.env.example` placeholder detected and
+  ignored) — selecting it IS the paid opt-in; other models stay on the :free
+  guard. Appears in /v1/models (Open WebUI picker) only when the key is set;
+  default model `claude-opus-4-8` via `ANTHROPIC_DEFAULT_MODEL`
+  (claude-haiku-4-5 = budget option). 63/63 unit tests.
 - **Smart router fixed + verified live — OpenRouter caps the `models` fallback array
   at 3:** `octo/auto` was sending all 5 preferred candidates and every request 400'd
   (`'models' array must have 3 items or fewer`) before any model was tried. Root cause

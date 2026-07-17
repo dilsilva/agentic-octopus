@@ -1,6 +1,10 @@
 """OpenRouter chat provider + the :free cost-guard policy (shared by the chat
-service, the /v1 shim, and OpenRouterExecutor)."""
+service, the /v1 shim, and OpenRouterExecutor).
 
+Includes the smart router: the virtual model 'octo/auto' expands to the preferred
+:free candidates, skipping ones in cooldown after 404/429/5xx failures."""
+
+import logging
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -9,6 +13,8 @@ from typing import Any
 import httpx
 
 from octo.config import settings
+
+log = logging.getLogger("octo.providers.openrouter")
 
 
 class PaidModelRefused(Exception):
@@ -32,12 +38,42 @@ class QuotaExceeded(Exception):
     )
 
 
+AUTO_MODEL = "octo/auto"
+
+# OpenRouter rejects `models` fallback arrays longer than 3 with a 400.
+MAX_FALLBACK_MODELS = 3
+
+
 def resolve_model(model: str) -> str:
     return settings.openrouter_default_model if model == "default" else model
 
 
+def router_candidates() -> list[str]:
+    """Preferred :free models, best-first, capped at MAX_FALLBACK_MODELS. Fed to
+    OpenRouter's native `models` fallback array — failover happens server-side
+    within ONE request (no extra daily-quota burn per attempt)."""
+    free = [
+        m.strip()
+        for m in settings.openrouter_preferred_models.split(",")
+        if m.strip().endswith(":free")  # the router NEVER routes to a billable model
+    ]
+    return free[:MAX_FALLBACK_MODELS]
+
+
+def route_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    """Expand the virtual octo/auto model into OpenRouter's fallback array."""
+    if payload.get("model") != AUTO_MODEL:
+        return payload
+    routed = {k: v for k, v in payload.items() if k != "model"}
+    routed["models"] = router_candidates()
+    return routed
+
+
 def enforce_free(model: str) -> None:
-    """Cost guard: only :free models unless the operator explicitly opted into paid."""
+    """Cost guard: only :free models unless the operator explicitly opted into paid.
+    The virtual router model passes — it expands exclusively to :free candidates."""
+    if model == AUTO_MODEL:
+        return
     if not model.endswith(":free") and not settings.openrouter_allow_paid:
         raise PaidModelRefused(
             f"model '{model}' is not a :free variant and OPENROUTER_ALLOW_PAID is off "
@@ -58,6 +94,7 @@ class OpenRouterProvider:
         return resolve_model(model)
 
     async def complete(self, payload: dict[str, Any]) -> httpx.Response:
+        payload = route_payload(payload)
         async with httpx.AsyncClient(timeout=300) as client:
             r = await client.post(
                 f"{settings.openrouter_base_url}/chat/completions",
@@ -70,6 +107,7 @@ class OpenRouterProvider:
 
     @asynccontextmanager
     async def stream(self, payload: dict[str, Any]) -> AsyncIterator[AsyncIterator[bytes]]:
+        payload = route_payload(payload)
         async with httpx.AsyncClient(timeout=300) as client:
             async with client.stream(
                 "POST",

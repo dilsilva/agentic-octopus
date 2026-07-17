@@ -5,6 +5,16 @@ this records what we did, decided, and parked. Conventions: skills/worklog.
 
 ## 2026-07-18
 
+- **Smart router fixed + verified live — OpenRouter caps the `models` fallback array
+  at 3:** `octo/auto` was sending all 5 preferred candidates and every request 400'd
+  (`'models' array must have 3 items or fewer`) before any model was tried. Root cause
+  found by probing the API directly; `router_candidates()` now capped at
+  `MAX_FALLBACK_MODELS = 3` (extras in `OPENROUTER_PREFERRED_MODELS` stay as warm
+  spares to promote). Verified end-to-end through the `/v1` shim, stream and
+  non-stream, served by `nvidia/nemotron-3-super-120b-a12b:free` at $0 — server-side
+  failover confirmed working (an earlier probe was served by `gemma-4-26b` when
+  nemotron was congested, same single request). Cap regression test added (52/52
+  unit); api + worker containers rebuilt with the fix.
 - **Fix — streaming errors no longer kill the connection:** Open WebUI showed
   `TransferEncodingError` when a model errored mid-stream (root cause: OpenRouter 404/429
   for models with no live endpoint raised inside the SSE generator AFTER HTTP 200 was

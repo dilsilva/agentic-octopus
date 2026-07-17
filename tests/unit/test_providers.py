@@ -63,6 +63,79 @@ async def test_list_models_filters_free_and_caches(monkeypatch):
     assert route.call_count == 1
 
 
+@pytest.fixture
+def router_setup(monkeypatch):
+    monkeypatch.setattr(settings, "openrouter_api_key", "k")
+    monkeypatch.setattr(
+        settings, "openrouter_preferred_models", "one/a:free,two/b:free,three/c:free"
+    )
+
+
+def test_auto_model_passes_cost_guard(monkeypatch):
+    monkeypatch.setattr(settings, "openrouter_allow_paid", False)
+    enforce_free(orp.AUTO_MODEL)  # virtual model expands to :free only — no raise
+
+
+def test_router_candidates_never_include_billable(monkeypatch):
+    monkeypatch.setattr(settings, "openrouter_preferred_models", "one/a:free,paid/model,two/b:free")
+    assert orp.router_candidates() == ["one/a:free", "two/b:free"]
+
+
+def test_router_candidates_capped_at_openrouter_limit(monkeypatch):
+    monkeypatch.setattr(
+        settings,
+        "openrouter_preferred_models",
+        "one/a:free,two/b:free,three/c:free,four/d:free,five/e:free",
+    )
+    assert orp.router_candidates() == ["one/a:free", "two/b:free", "three/c:free"]
+
+
+def test_route_payload_expands_auto_to_native_fallback_array(router_setup):
+    routed = orp.route_payload({"model": orp.AUTO_MODEL, "messages": [1]})
+    assert "model" not in routed
+    assert routed["models"] == ["one/a:free", "two/b:free", "three/c:free"]
+    # explicit models pass through untouched
+    explicit = orp.route_payload({"model": "one/a:free", "messages": [1]})
+    assert explicit == {"model": "one/a:free", "messages": [1]}
+
+
+@respx.mock
+async def test_auto_complete_sends_models_array(router_setup):
+    import json as _json
+
+    route = respx.post("https://openrouter.ai/api/v1/chat/completions").mock(
+        return_value=httpx.Response(
+            200, json={"model": "two/b:free", "choices": [{"message": {"content": "ok"}}]}
+        )
+    )
+    r = await OpenRouterProvider().complete({"model": orp.AUTO_MODEL, "messages": []})
+    assert r.status_code == 200
+    sent = _json.loads(route.calls[0].request.content)
+    assert "model" not in sent
+    assert sent["models"] == ["one/a:free", "two/b:free", "three/c:free"]
+    assert route.call_count == 1  # ONE request — server-side fallback, no quota burn
+
+
+@respx.mock
+async def test_auto_stream_sends_models_array(router_setup):
+    import json as _json
+
+    route = respx.post("https://openrouter.ai/api/v1/chat/completions").mock(
+        return_value=httpx.Response(
+            200,
+            content=b'data: {"choices":[{"delta":{"content":"ok"}}]}\n\ndata: [DONE]\n\n',
+            headers={"content-type": "text/event-stream"},
+        )
+    )
+    received = b""
+    async with OpenRouterProvider().stream({"model": orp.AUTO_MODEL, "messages": []}) as chunks:
+        async for c in chunks:
+            received += c
+    assert b'"content":"ok"' in received
+    sent = _json.loads(route.calls[0].request.content)
+    assert sent["models"] == ["one/a:free", "two/b:free", "three/c:free"]
+
+
 @respx.mock
 async def test_list_models_fallback_on_failure(monkeypatch):
     monkeypatch.setattr(orp, "_models_cache", (0.0, []))

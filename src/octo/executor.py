@@ -160,16 +160,17 @@ class OpenRouterExecutor:
 
         content = data["choices"][0]["message"]["content"]
         usage = data.get("usage") or {}
+        actual_model = data.get("model") or model  # router resolves 'octo/auto'
         outfile = workdir / f"{m.name}-{datetime.now(UTC).strftime('%Y-%m-%d')}.md"
         outfile.write_text(content)
         await on_event("message", {"text": content[:2000]})
         return ExecOutcome(
             status="completed",
             result=(
-                f"wrote {outfile.name} ({len(content)} chars, model={model}, "
+                f"wrote {outfile.name} ({len(content)} chars, model={actual_model}, "
                 f"tokens={usage.get('total_tokens')})"
             ),
-            cost_usd=0.0 if model.endswith(":free") else None,
+            cost_usd=0.0 if actual_model.endswith(":free") else None,
         )
 
 

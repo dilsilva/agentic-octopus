@@ -99,6 +99,71 @@ class ClaudeSDKExecutor:
         return outcome
 
 
+class OpenRouterExecutor:
+    """Provider-agnostic executor (P2.5): one-shot chat completion via OpenRouter's
+    OpenAI-compatible API. v1 has no local tools — the model answers in a single
+    response and the executor writes the output file itself. Pre-execution gates
+    apply; mid-run gates are SDK-only (ADR-0002)."""
+
+    async def execute(
+        self, run: dict[str, Any], agent: LoadedAgent, workdir: Path, on_event: OnEvent
+    ) -> ExecOutcome:
+        from datetime import UTC, datetime
+
+        import httpx
+
+        from octo.config import settings
+
+        if not settings.openrouter_api_key:
+            return ExecOutcome(status="failed", error="OPENROUTER_API_KEY not configured")
+
+        m = agent.manifest
+        model = m.model if m.model != "default" else settings.openrouter_default_model
+        params = run.get("params") or m.params
+        user_msg = (
+            "Execute your task now, in a single response. Run parameters (JSON):\n"
+            f"{params}\n"
+            "You have no tools in this environment: work from your knowledge, state its "
+            "limits explicitly (including your knowledge cutoff), and return ONLY the "
+            "final markdown document — it will be saved for you."
+        )
+        await on_event("log", {"executor": "openrouter", "model": model})
+
+        async with httpx.AsyncClient(timeout=300) as client:
+            r = await client.post(
+                f"{settings.openrouter_base_url}/chat/completions",
+                headers={"Authorization": f"Bearer {settings.openrouter_api_key}"},
+                json={
+                    "model": model,
+                    "messages": [
+                        {"role": "system", "content": agent.prompt},
+                        {"role": "user", "content": user_msg},
+                    ],
+                },
+            )
+        if r.status_code != 200:
+            return ExecOutcome(status="failed", error=f"openrouter {r.status_code}: {r.text[:500]}")
+        data = r.json()
+        if data.get("error"):  # OpenRouter can return 200 with an embedded error
+            return ExecOutcome(
+                status="failed", error=f"openrouter error: {str(data['error'])[:500]}"
+            )
+
+        content = data["choices"][0]["message"]["content"]
+        usage = data.get("usage") or {}
+        outfile = workdir / f"{m.name}-{datetime.now(UTC).strftime('%Y-%m-%d')}.md"
+        outfile.write_text(content)
+        await on_event("message", {"text": content[:2000]})
+        return ExecOutcome(
+            status="completed",
+            result=(
+                f"wrote {outfile.name} ({len(content)} chars, model={model}, "
+                f"tokens={usage.get('total_tokens')})"
+            ),
+            cost_usd=0.0 if model.endswith(":free") else None,
+        )
+
+
 def _clip(value: Any, limit: int = 500) -> Any:
     s = str(value)
     return s if len(s) <= limit else s[:limit] + "…"
@@ -107,4 +172,6 @@ def _clip(value: Any, limit: int = 500) -> Any:
 def get_executor(name: str) -> AgentExecutor:
     if name == "claude-sdk":
         return ClaudeSDKExecutor()
+    if name == "openrouter":
+        return OpenRouterExecutor()
     raise ValueError(f"no executor registered for '{name}'")

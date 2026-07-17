@@ -8,6 +8,9 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql://octo:octo@localhost:5432/octo"
     anthropic_api_key: str = ""
+    openrouter_api_key: str = ""
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"
+    openrouter_default_model: str = "nvidia/nemotron-3-super-120b-a12b:free"
     octo_api_token: str = "change-me"
     octo_api_url: str = "http://localhost:8000"
     octo_env: str = "local"

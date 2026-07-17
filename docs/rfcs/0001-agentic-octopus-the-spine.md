@@ -186,8 +186,11 @@ by a single guard function, not scattered UPDATEs.
   4. worker loop + scheduler + pre-execution gates;
   5. CLI + research-brief live + smoke evidence in worklog.
 - **P2:** inbound webhooks (`POST /hooks/{source}`, HMAC) + mid-run gates via MCP tool + resume.
-- **P2.5:** OpenRouter executor — provider-agnostic model selection per agent manifest
-  (pre-execution gates only at first; see ADR-0002).
+- **P2.5:** ✅ shipped 2026-07-17 (pulled forward — no Anthropic key available). OpenRouter
+  executor v1: one-shot completion, no local tools (model knowledge only, limits stamped on
+  output), executor writes the output file; free-tier `:free` models supported. Pre-execution
+  gates only (see ADR-0002). v2 candidates: `:online` search-grounded models (needs credits),
+  tool-calling loop.
 - **P3:** Telegram bot — deliver briefs, inline approve/reject buttons on the same approvals API.
 - **P4:** ⚠️ **GCP deploy (consent gate — first prod-touching step):** Cloud Run (api, worker),
   Cloud SQL Postgres + pgvector, Secret Manager; CI gains a deploy stage gated on manual action.

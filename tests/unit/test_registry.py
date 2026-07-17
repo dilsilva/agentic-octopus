@@ -19,7 +19,7 @@ def test_loads_repo_exemplar():
     registry = load_registry(REPO_AGENTS)
     assert "research-brief" in registry
     a = registry["research-brief"]
-    assert a.manifest.executor == "claude-sdk"
+    assert a.manifest.executor in {"claude-sdk", "openrouter"}
     assert a.manifest.requires_approval is False
     assert "WebSearch" in a.manifest.tools
     assert a.prompt.strip()

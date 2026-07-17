@@ -11,7 +11,7 @@ import yaml
 from croniter import croniter
 from pydantic import BaseModel, Field, field_validator
 
-KNOWN_EXECUTORS = {"claude-sdk"}  # P2.5 adds "openrouter"
+KNOWN_EXECUTORS = {"claude-sdk", "openrouter"}
 
 
 class OutputSpec(BaseModel):

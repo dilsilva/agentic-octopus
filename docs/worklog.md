@@ -3,11 +3,25 @@
 Cross-session log of actions and decisions, newest first. Facts live in topic docs/RFCs/ADRs;
 this records what we did, decided, and parked. Conventions: skills/worklog.
 
+## 2026-07-17
+
+- **NEXT UP:** P2 per RFC-0001 (webhooks + mid-run gates) or first additional agent —
+  Diego to pick. Also consider: $10 OpenRouter top-up (unlocks 1000 req/day + `:online`
+  search-grounded models for a fresher brief), and rotating the OpenRouter key (it was
+  pasted into a chat session).
+- **🎉 FIRST SUCCESSFUL AGENT RUN through the spine:** `research-brief` via OpenRouter free
+  tier — run 1abe64f7 `completed` in 16s, cost $0.00, model
+  `nvidia/nemotron-3-super-120b-a12b:free`, output `data/briefs/research-brief-2026-07-17.md`.
+  Brief correctly self-labels knowledge-cutoff limits (no web tools in executor v1).
+- **P2.5 OpenRouterExecutor shipped (pulled forward — Diego has no Anthropic key):**
+  one-shot chat completion, executor writes the output file, `:free` models → cost 0.0;
+  registry accepts `executor: openrouter`; default model via `OPENROUTER_DEFAULT_MODEL`
+  (currently nemotron-3-super). `research-brief` manifest switched claude-sdk → openrouter.
+  5 new unit tests (respx-mocked; success/default-model/429/embedded-error/missing-key).
+  🔒 `OPENROUTER_API_KEY` lives in `.env` only (gitignored, verified).
+
 ## 2026-07-16
 
-- **NEXT UP:** first real research brief — fill `ANTHROPIC_API_KEY` in `.env`, restart worker,
-  `uv run octo run research-brief --follow`; expect `data/briefs/brief-YYYY-MM-DD.md` + run
-  `completed` with cost. Then P2 (webhooks, mid-run gates) / P2.5 (OpenRouter executor) per RFC-0001.
 - **M1 walking skeleton complete:** queue (SKIP LOCKED claim/lease/reaper), run state machine
   with guarded transitions, agent registry, `AgentExecutor` protocol (ClaudeSDK + Fake), full
   API (runs/approve/reject/schedules + bearer auth), worker loop with pre-execution gates,

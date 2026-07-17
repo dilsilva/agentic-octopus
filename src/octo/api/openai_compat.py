@@ -66,6 +66,16 @@ async def chat_completions(request: Request):
     except PaidModelRefused as exc:
         return _openai_error(400, str(exc), "invalid_request_error")
     body["model"] = model
+    # Shim contract (ADR-0007): plain completions only. Clients like Open WebUI may
+    # inject tools (e.g. get_current_timestamp); many :free models have no tool-capable
+    # endpoint and OpenRouter then 404s. Tool use arrives with the core tool loop.
+    stripped = [
+        k
+        for k in ("tools", "tool_choice", "functions", "function_call")
+        if body.pop(k, None) is not None
+    ]
+    if stripped:
+        log.info("stripped unsupported fields from /v1 request: %s", stripped)
     started = time.monotonic()
 
     if not body.get("stream"):

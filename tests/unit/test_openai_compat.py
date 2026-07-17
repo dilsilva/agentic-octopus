@@ -84,6 +84,32 @@ def test_streaming_passthrough_verbatim(client_without_db):
 
 
 @respx.mock
+def test_tool_fields_stripped_before_forwarding(client_without_db):
+    """Open WebUI injects tools (get_current_timestamp); many :free models 404 on tool
+    requests. The shim's contract is plain completions — tool fields must not reach
+    the provider."""
+    import json as _json
+
+    route = respx.post(OR_URL).mock(
+        return_value=httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]})
+    )
+    r = client_without_db.post(
+        "/v1/chat/completions",
+        json={
+            "model": "a/b:free",
+            "messages": [{"role": "user", "content": "hi"}],
+            "tools": [{"type": "function", "function": {"name": "get_current_timestamp"}}],
+            "tool_choice": "auto",
+        },
+        headers=AUTH,
+    )
+    assert r.status_code == 200
+    forwarded = _json.loads(route.calls[0].request.content)
+    assert "tools" not in forwarded
+    assert "tool_choice" not in forwarded
+
+
+@respx.mock
 def test_streaming_upstream_error_yields_clean_sse_not_dead_connection(client_without_db):
     """Regression: OpenRouter 404 (model with no live endpoint) mid-stream used to kill
     the chunked response (client saw TransferEncodingError). Must emit a readable SSE

@@ -15,8 +15,7 @@ from psycopg.types.json import Jsonb
 from psycopg_pool import AsyncConnectionPool
 
 from octo.config import settings
-from octo.providers.base import get_chat_provider
-from octo.providers.openrouter import enforce_free
+from octo.providers.base import ChatProvider, route_chat_model
 from octo.registry import LoadedAgent
 
 DEFAULT_PERSONA = "chat-assistant"
@@ -135,18 +134,17 @@ async def _prepare(
     registry: dict[str, LoadedAgent],
     conversation_id: str,
     user_text: str,
-) -> tuple[str, list[dict[str, str]]]:
+) -> tuple[ChatProvider, str, list[dict[str, str]]]:
     """Shared preamble for send/send_stream: persist user msg, build payload context."""
     convo = await get_conversation(pool, conversation_id)
     if convo is None:
         raise LookupError(f"conversation {conversation_id} not found")
-    provider = get_chat_provider(settings.chat_provider)
-    model = provider.resolve_model(convo["model"] or "default")
-    enforce_free(model)  # OpenRouter billing policy (cost guard)
+    # Per-model routing + billing policy (cost guard / Anthropic key opt-in)
+    provider, model = route_chat_model(convo["model"] or "default")
     await _append(pool, conversation_id, "user", user_text)
     history = await get_messages(pool, conversation_id)
     context = build_context(system_prompt_for(convo["persona"], registry), history)
-    return model, context
+    return provider, model, context
 
 
 async def send(
@@ -155,8 +153,7 @@ async def send(
     conversation_id: str,
     user_text: str,
 ) -> dict[str, Any]:
-    model, context = await _prepare(pool, registry, conversation_id, user_text)
-    provider = get_chat_provider(settings.chat_provider)
+    provider, model, context = await _prepare(pool, registry, conversation_id, user_text)
     started = time.monotonic()
     r = await provider.complete({"model": model, "messages": context})
     duration_ms = int((time.monotonic() - started) * 1000)
@@ -172,7 +169,7 @@ async def send(
         conversation_id,
         "assistant",
         content,
-        model=model,
+        model=data.get("model") or model,  # actual routed model, not 'octo/auto'
         prompt_tokens=usage.get("prompt_tokens"),
         completion_tokens=usage.get("completion_tokens"),
         duration_ms=duration_ms,
@@ -188,8 +185,7 @@ async def send_stream(
     """Yields OpenAI-style chunk dicts; final yield is {"done": ..., "message": row}.
     If the client disconnects mid-stream, the partial reply is persisted with
     metadata.truncated = true (the generator's finally block runs on aclose())."""
-    model, context = await _prepare(pool, registry, conversation_id, user_text)
-    provider = get_chat_provider(settings.chat_provider)
+    provider, model, context = await _prepare(pool, registry, conversation_id, user_text)
     started = time.monotonic()
     parts: list[str] = []
     usage: dict[str, Any] = {}

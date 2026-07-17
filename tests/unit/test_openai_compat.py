@@ -16,13 +16,24 @@ def fresh_models_cache(monkeypatch):
 
 
 @respx.mock
-def test_models_lists_only_free(client_without_db):
+def test_models_lists_only_free(client_without_db, monkeypatch):
+    monkeypatch.setattr(settings, "anthropic_api_key", "")
     respx.get("https://openrouter.ai/api/v1/models").mock(
         return_value=httpx.Response(200, json={"data": [{"id": "a/b:free"}, {"id": "paid/model"}]})
     )
     r = client_without_db.get("/v1/models", headers=AUTH)
     assert r.status_code == 200
-    assert [m["id"] for m in r.json()["data"]] == ["a/b:free"]
+    assert [m["id"] for m in r.json()["data"]] == ["octo/auto", "a/b:free"]
+
+
+@respx.mock
+def test_models_lists_octo_claude_when_key_set(client_without_db, monkeypatch):
+    monkeypatch.setattr(settings, "anthropic_api_key", "sk-test")
+    respx.get("https://openrouter.ai/api/v1/models").mock(
+        return_value=httpx.Response(200, json={"data": [{"id": "a/b:free"}]})
+    )
+    r = client_without_db.get("/v1/models", headers=AUTH)
+    assert [m["id"] for m in r.json()["data"]] == ["octo/auto", "octo/claude", "a/b:free"]
 
 
 @respx.mock

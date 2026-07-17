@@ -36,3 +36,29 @@ def get_chat_provider(name: str) -> ChatProvider:
 
         return OpenRouterProvider()
     raise ValueError(f"no chat provider registered for '{name}'")
+
+
+def route_chat_model(requested: str) -> tuple[ChatProvider, str]:
+    """Per-model provider routing + billing policy, in one seam.
+
+    'octo/claude' (or an explicit claude-* id) → Anthropic, gated on
+    ANTHROPIC_API_KEY being set — selecting it is the paid opt-in. Everything
+    else → the configured chat provider under the OpenRouter :free cost guard.
+    """
+    from octo.config import settings
+    from octo.providers.claude import CLAUDE_MODEL, AnthropicChatProvider
+    from octo.providers.openrouter import PaidModelRefused, enforce_free
+
+    if requested == CLAUDE_MODEL or requested.startswith("claude-"):
+        if not settings.anthropic_key_set:
+            raise PaidModelRefused(
+                f"model '{requested}' routes to the Anthropic API (billable) but "
+                "ANTHROPIC_API_KEY is not set — add the key to opt in"
+            )
+        provider: ChatProvider = AnthropicChatProvider()
+        return provider, provider.resolve_model(requested)
+
+    provider = get_chat_provider(settings.chat_provider)
+    model = provider.resolve_model(requested)
+    enforce_free(model)
+    return provider, model

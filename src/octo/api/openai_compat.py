@@ -13,8 +13,9 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from octo.api.auth import require_chat_token
 from octo.config import settings
-from octo.providers.base import get_chat_provider
-from octo.providers.openrouter import PaidModelRefused, QuotaExceeded, enforce_free
+from octo.providers.base import get_chat_provider, route_chat_model
+from octo.providers.claude import CLAUDE_MODEL
+from octo.providers.openrouter import AUTO_MODEL, PaidModelRefused, QuotaExceeded
 
 log = logging.getLogger("octo.api.v1")
 
@@ -52,17 +53,20 @@ async def _log_metadata(request: Request, *, model, usage, duration_ms, stream) 
 @router.get("/models")
 async def list_models():
     provider = get_chat_provider(settings.chat_provider)
-    models = await provider.list_models()
+    # octo/auto first: the smart router — picks a healthy :free model automatically.
+    # octo/claude appears only when ANTHROPIC_API_KEY is set (billable, opt-in).
+    models = [AUTO_MODEL]
+    if settings.anthropic_key_set:
+        models.append(CLAUDE_MODEL)
+    models.extend(await provider.list_models())
     return {"object": "list", "data": [{"id": m, "object": "model"} for m in models]}
 
 
 @router.post("/chat/completions")
 async def chat_completions(request: Request):
     body = await request.json()
-    provider = get_chat_provider(settings.chat_provider)
-    model = provider.resolve_model(body.get("model") or "default")
     try:
-        enforce_free(model)
+        provider, model = route_chat_model(body.get("model") or "default")
     except PaidModelRefused as exc:
         return _openai_error(400, str(exc), "invalid_request_error")
     body["model"] = model
@@ -84,14 +88,20 @@ async def chat_completions(request: Request):
         except QuotaExceeded as exc:
             return _openai_error(429, str(exc), "rate_limit_error")
         duration_ms = int((time.monotonic() - started) * 1000)
-        usage = r.json().get("usage") if r.status_code == 200 else None
+        data = r.json()
+        usage = data.get("usage") if r.status_code == 200 else None
         await _log_metadata(
-            request, model=model, usage=usage, duration_ms=duration_ms, stream=False
+            request,
+            model=data.get("model") or model,  # actual routed model, not 'octo/auto'
+            usage=usage,
+            duration_ms=duration_ms,
+            stream=False,
         )
-        return JSONResponse(status_code=r.status_code, content=r.json())
+        return JSONResponse(status_code=r.status_code, content=data)
 
     async def sse():
         usage = {}
+        actual_model = [model]
         try:
             async with provider.stream(body) as chunks:
                 buffer = b""
@@ -106,6 +116,8 @@ async def chat_completions(request: Request):
                                     chunk = json.loads(line[6:])
                                     if chunk.get("usage"):
                                         usage.update(chunk["usage"])
+                                    if chunk.get("model"):
+                                        actual_model[0] = chunk["model"]
                                 except json.JSONDecodeError:
                                     pass
                         yield event + b"\n\n"
@@ -118,7 +130,7 @@ async def chat_completions(request: Request):
         finally:
             await _log_metadata(
                 request,
-                model=model,
+                model=actual_model[0],
                 usage=usage,
                 duration_ms=int((time.monotonic() - started) * 1000),
                 stream=True,

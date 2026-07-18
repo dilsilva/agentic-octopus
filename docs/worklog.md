@@ -5,6 +5,16 @@ this records what we did, decided, and parked. Conventions: skills/worklog.
 
 ## 2026-07-18
 
+- **Docs overhaul + documentation contract (v0.4.0):** README rewritten to current
+  reality (capability table, chat surfaces, API section); `CHANGELOG.md` created and
+  back-filled 0.0.1→0.4.0; **HARD RULE** established in `docs/RELEASING.md` + CLAUDE.md —
+  every significant change runs the wrap-up checklist (CHANGELOG, `make openapi` when the
+  API changes, README/CLAUDE.md currency, ADR/RFC, worklog) before the final commit.
+  OpenAPI made first-class: tagged + described routes, HTTPBearer security scheme
+  (Authorize button works in `/docs`), rich API description, committed spec at
+  `docs/api/openapi.json` via `make openapi`. Version synced to 0.4.0.
+- **Repo mirrored to GitHub:** private `github.com/dilsilva/agentic-octopus` added as
+  `github` remote beside GitLab `origin`; push both on wrap-up.
 - **🎉 Spine deployed on treco (homelab, ARM64 RK3588 / Ubuntu 20.04):** clone at
   `~/apps/agentic-octopus` via read-only GitLab deploy key (id 21224058, key on
   treco `~/.ssh/id_ed25519`); `.env` copied over SSH (never via git). Open WebUI

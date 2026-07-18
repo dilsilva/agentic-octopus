@@ -24,7 +24,7 @@ def _pool(request: Request):
 # --- agents ---------------------------------------------------------------
 
 
-@router.get("/agents")
+@router.get("/agents", tags=["agents"], summary="List registered agents")
 async def list_agents(request: Request):
     registry = request.app.state.registry
     return [
@@ -44,7 +44,9 @@ class RunRequest(BaseModel):
     params: dict = {}
 
 
-@router.post("/agents/{name}/run", status_code=202)
+@router.post(
+    "/agents/{name}/run", status_code=202, tags=["agents"], summary="Enqueue a run for an agent"
+)
 async def run_agent(name: str, body: RunRequest, request: Request):
     if name not in request.app.state.registry:
         raise HTTPException(status_code=404, detail=f"unknown agent '{name}'")
@@ -55,14 +57,14 @@ async def run_agent(name: str, body: RunRequest, request: Request):
 # --- runs -----------------------------------------------------------------
 
 
-@router.get("/runs")
+@router.get("/runs", tags=["runs"], summary="List recent runs")
 async def list_runs(
     request: Request, status: str | None = None, agent: str | None = None, limit: int = 50
 ):
     return await queue.list_runs(_pool(request), status=status, agent=agent, limit=min(limit, 500))
 
 
-@router.get("/runs/{run_id}")
+@router.get("/runs/{run_id}", tags=["runs"], summary="Get one run")
 async def get_run(run_id: str, request: Request):
     run = await queue.get_run(_pool(request), run_id)
     if run is None:
@@ -70,7 +72,7 @@ async def get_run(run_id: str, request: Request):
     return run
 
 
-@router.get("/runs/{run_id}/events")
+@router.get("/runs/{run_id}/events", tags=["runs"], summary="Run audit trail (events)")
 async def get_run_events(run_id: str, request: Request):
     return await queue.list_events(_pool(request), run_id)
 
@@ -79,12 +81,12 @@ class DecisionRequest(BaseModel):
     note: str | None = None
 
 
-@router.post("/runs/{run_id}/approve")
+@router.post("/runs/{run_id}/approve", tags=["runs"], summary="Approve a gated run")
 async def approve_run(run_id: str, body: DecisionRequest, request: Request):
     return await _decide(request, run_id, approved=True, note=body.note)
 
 
-@router.post("/runs/{run_id}/reject")
+@router.post("/runs/{run_id}/reject", tags=["runs"], summary="Reject a gated run")
 async def reject_run(run_id: str, body: DecisionRequest, request: Request):
     return await _decide(request, run_id, approved=False, note=body.note)
 
@@ -102,7 +104,7 @@ async def _decide(request: Request, run_id: str, *, approved: bool, note: str | 
 # --- schedules --------------------------------------------------------------
 
 
-@router.get("/schedules")
+@router.get("/schedules", tags=["schedules"], summary="List schedules")
 async def list_schedules(request: Request):
     async with _pool(request).connection() as conn:
         cur = conn.cursor(row_factory=dict_row)
@@ -117,7 +119,7 @@ class ScheduleRequest(BaseModel):
     params: dict = {}
 
 
-@router.post("/schedules", status_code=201)
+@router.post("/schedules", status_code=201, tags=["schedules"], summary="Create/enable a schedule")
 async def create_schedule(body: ScheduleRequest, request: Request):
     if body.agent not in request.app.state.registry:
         raise HTTPException(status_code=404, detail=f"unknown agent '{body.agent}'")
@@ -144,13 +146,17 @@ async def create_schedule(body: ScheduleRequest, request: Request):
     return {"schedule_id": str(row[0])}
 
 
-@router.post("/schedules/sync")
+@router.post(
+    "/schedules/sync", tags=["schedules"], summary="Upsert default schedules from agent manifests"
+)
 async def sync_schedules(request: Request):
     created = await scheduler.sync_from_registry(_pool(request), request.app.state.registry)
     return {"created": created}
 
 
-@router.post("/schedules/{schedule_id}/toggle")
+@router.post(
+    "/schedules/{schedule_id}/toggle", tags=["schedules"], summary="Enable/disable a schedule"
+)
 async def toggle_schedule(schedule_id: str, request: Request):
     async with _pool(request).connection() as conn:
         row = await (

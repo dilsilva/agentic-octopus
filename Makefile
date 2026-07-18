@@ -1,4 +1,4 @@
-.PHONY: dev down logs db-migrate psql lint fmt test test-integration smoke backup
+.PHONY: dev down logs db-migrate psql lint fmt test test-integration smoke backup openapi
 
 dev:            ## bring the whole stack up (postgres, migrate, api, worker)
 	docker compose up --build -d
@@ -32,6 +32,12 @@ test-integration:
 
 smoke:          ## end-to-end sanity against a running stack
 	curl -sf http://localhost:8000/healthz | python3 -m json.tool
+
+openapi:        ## regenerate the committed OpenAPI spec (docs/api/openapi.json)
+	mkdir -p docs/api
+	uv run python -c "import json; from octo.api.main import app; \
+	print(json.dumps(app.openapi(), indent=2))" > docs/api/openapi.json
+	@echo "wrote docs/api/openapi.json — interactive docs: http://localhost:8000/docs"
 
 backup:         ## dump the spine DB (stateful volumes: pgdata + openwebui-data)
 	mkdir -p backups

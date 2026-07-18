@@ -27,13 +27,58 @@ async def lifespan(app: FastAPI):
         await app.state.pool.close()
 
 
+DESCRIPTION = """
+The **spine** for personal agentic applications: one orchestration service every agent
+plugs into — triggering (API + cron schedules), a durable Postgres-backed run queue,
+human **approval gates**, full audit trail, and multi-surface **chat**.
+
+### Authentication
+All routes except `/healthz` require `Authorization: Bearer <token>`:
+
+| Token | Scope |
+|---|---|
+| `OCTO_API_TOKEN` | admin — everything |
+| `OCTO_CHAT_TOKEN` | chat surfaces only (`/chat/*`, `/v1/*`) — hand this to chat UIs |
+
+### Model routing
+`octo/auto` (the default) smart-routes across healthy **free** models with server-side
+fallback. Explicit model ids are honored as-is; non-free models are refused unless the
+operator opted in (`OPENROUTER_ALLOW_PAID`) or selected `octo/claude` with an Anthropic
+key configured.
+
+### Surfaces
+- **Native API** (this spec): agents, runs, approvals, schedules, chat.
+- **`/v1`** — OpenAI-compatible *protocol namespace* (not a version): plug in any
+  OpenAI-protocol client (Open WebUI, SDKs). Plain completions; tool fields stripped.
+
+Full design: `docs/rfcs/0001-agentic-octopus-the-spine.md` · Decisions: `docs/adr/`
+"""
+
+TAGS = [
+    {"name": "system", "description": "Health and service metadata"},
+    {"name": "agents", "description": "Declarative agent definitions and run triggering"},
+    {"name": "runs", "description": "Run lifecycle, audit events, and approval gates"},
+    {"name": "schedules", "description": "Cron schedules that enqueue runs"},
+    {"name": "chat", "description": "Spine-owned conversations (stateful, all UIs share them)"},
+    {"name": "openai-compat", "description": "OpenAI-protocol shim for clients like Open WebUI"},
+]
+
+
 def create_app() -> FastAPI:
-    app = FastAPI(title="agentic-octopus", version=__version__, lifespan=lifespan)
+    app = FastAPI(
+        title="agentic-octopus",
+        version=__version__,
+        description=DESCRIPTION,
+        openapi_tags=TAGS,
+        lifespan=lifespan,
+        contact={"name": "Diego Silva", "url": "https://gitlab.com/behold-corp/agentic-octopus"},
+        license_info={"name": "Private"},
+    )
     app.include_router(router)
     app.include_router(chat_router)
     app.include_router(openai_router)
 
-    @app.get("/healthz")
+    @app.get("/healthz", tags=["system"], summary="Liveness + DB reachability")
     async def healthz():
         db_ok = False
         if app.state.pool is not None:

@@ -17,7 +17,7 @@ from octo.providers.openrouter import PaidModelRefused, ProviderError, QuotaExce
 
 log = logging.getLogger("octo.api.chat")
 
-router = APIRouter(prefix="/chat", dependencies=[Depends(require_chat_token)])
+router = APIRouter(prefix="/chat", tags=["chat"], dependencies=[Depends(require_chat_token)])
 
 
 def _pool(request: Request):

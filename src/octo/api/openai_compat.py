@@ -19,7 +19,7 @@ from octo.providers.openrouter import AUTO_MODEL, PaidModelRefused, QuotaExceede
 
 log = logging.getLogger("octo.api.v1")
 
-router = APIRouter(prefix="/v1", dependencies=[Depends(require_chat_token)])
+router = APIRouter(prefix="/v1", tags=["openai-compat"], dependencies=[Depends(require_chat_token)])
 
 
 def _openai_error(status: int, message: str, err_type: str) -> JSONResponse:

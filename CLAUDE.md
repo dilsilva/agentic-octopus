@@ -51,6 +51,9 @@ approvals — gates are decided by Diego only.**
   Protocol in `src/octo/executor.py`, M1).
 - Migrations are append-only numbered files in `db/migrations/`; never edit an applied one.
 - Update `docs/worklog.md` after significant work; corrections are new entries, never edits.
+- **Wrap-up = documentation:** every significant change runs the checklist in
+  `docs/RELEASING.md` before the final commit (CHANGELOG, `make openapi` if the API
+  changed, README/CLAUDE.md currency, ADR/RFC when decisions changed).
 
 ## Glossary
 

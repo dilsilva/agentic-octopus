@@ -59,16 +59,22 @@ async def resolve_local(requested: str) -> str:
     """octo/local-<name> -> the installed Ollama tag it refers to."""
     if not enabled():
         raise OllamaUnavailable(
-            f"model '{requested}' is a local model but OLLAMA_BASE_URL is not configured "
-            "on this host"
+            f"model '{requested}' is a local model but local LLMs are disabled on this "
+            "host — enable with COMPOSE_PROFILES=local-llm in .env (see .env.example)"
         )
     tags = await installed_tags()
+    if not tags:
+        raise OllamaUnavailable(
+            f"model '{requested}' requires local LLMs, but no Ollama models are "
+            "reachable on this host — is COMPOSE_PROFILES=local-llm enabled in .env, "
+            "and has the model been pulled? (docker compose exec ollama ollama pull …)"
+        )
     for tag in tags:
         if virtual_name(tag) == requested:
             return tag
     raise OllamaUnavailable(
         f"no installed Ollama model matches '{requested}' "
-        f"(installed: {[virtual_name(t) for t in tags] or 'none'} — `ollama pull` it first)"
+        f"(installed: {[virtual_name(t) for t in tags]} — `ollama pull` it first)"
     )
 
 

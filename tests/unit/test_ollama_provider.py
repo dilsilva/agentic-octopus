@@ -23,7 +23,7 @@ def test_virtual_name_mapping():
 
 async def test_disabled_host_raises_clear_error(monkeypatch):
     monkeypatch.setattr(settings, "ollama_base_url", "")
-    with pytest.raises(OllamaUnavailable, match="OLLAMA_BASE_URL is not configured"):
+    with pytest.raises(OllamaUnavailable, match="local LLMs are disabled on this host"):
         await resolve_local("octo/local-qwen3.5-4b")
 
 

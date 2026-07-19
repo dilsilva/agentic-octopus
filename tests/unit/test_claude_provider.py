@@ -104,31 +104,33 @@ async def test_sse_from_stream_emits_openai_chunks():
     assert b"msg_9" in joined
 
 
-def test_route_claude_requires_key(monkeypatch):
+async def test_route_claude_requires_key(monkeypatch):
     monkeypatch.setattr(settings, "anthropic_api_key", "")
     with pytest.raises(PaidModelRefused):
-        route_chat_model(clp.CLAUDE_MODEL)
+        await route_chat_model(clp.CLAUDE_MODEL)
 
 
-def test_route_claude_with_key(anthropic_on):
-    provider, model = route_chat_model(clp.CLAUDE_MODEL)
+async def test_route_claude_with_key(anthropic_on):
+    provider, model, name = await route_chat_model(clp.CLAUDE_MODEL)
     assert isinstance(provider, AnthropicChatProvider)
     assert model == "claude-opus-4-8"
+    assert name == "anthropic"
 
 
-def test_route_default_goes_to_openrouter(monkeypatch):
+async def test_route_default_goes_to_openrouter(monkeypatch):
     monkeypatch.setattr(settings, "chat_provider", "openrouter")
     monkeypatch.setattr(settings, "openrouter_default_model", AUTO_MODEL)
-    provider, model = route_chat_model("default")
+    provider, model, name = await route_chat_model("default")
     assert isinstance(provider, OpenRouterProvider)
     assert model == AUTO_MODEL
+    assert name == "openrouter"
 
 
-def test_route_still_enforces_free_guard(monkeypatch):
+async def test_route_still_enforces_free_guard(monkeypatch):
     monkeypatch.setattr(settings, "chat_provider", "openrouter")
     monkeypatch.setattr(settings, "openrouter_allow_paid", False)
     with pytest.raises(PaidModelRefused):
-        route_chat_model("some/paid-model")
+        await route_chat_model("some/paid-model")
 
 
 async def test_list_models_gated_on_key(monkeypatch):

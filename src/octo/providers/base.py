@@ -38,16 +38,23 @@ def get_chat_provider(name: str) -> ChatProvider:
     raise ValueError(f"no chat provider registered for '{name}'")
 
 
-def route_chat_model(requested: str) -> tuple[ChatProvider, str]:
+async def route_chat_model(requested: str) -> tuple[ChatProvider, str, str]:
     """Per-model provider routing + billing policy, in one seam.
+    Returns (provider, resolved_model, provider_name).
 
-    'octo/claude' (or an explicit claude-* id) → Anthropic, gated on
-    ANTHROPIC_API_KEY being set — selecting it is the paid opt-in. Everything
-    else → the configured chat provider under the OpenRouter :free cost guard.
+    - 'octo/local-<name>' → Ollama (local, $0) — requires OLLAMA_BASE_URL on this host.
+    - 'octo/claude' (or claude-*) → Anthropic, gated on ANTHROPIC_API_KEY being set —
+      selecting it is the paid opt-in.
+    - everything else → the configured chat provider under the :free cost guard.
     """
     from octo.config import settings
     from octo.providers.claude import CLAUDE_MODEL, AnthropicChatProvider
+    from octo.providers.ollama import LOCAL_PREFIX, OllamaProvider, resolve_local
     from octo.providers.openrouter import PaidModelRefused, enforce_free
+
+    if requested.startswith(LOCAL_PREFIX):
+        tag = await resolve_local(requested)
+        return OllamaProvider(), tag, "ollama"
 
     if requested == CLAUDE_MODEL or requested.startswith("claude-"):
         if not settings.anthropic_key_set:
@@ -56,9 +63,9 @@ def route_chat_model(requested: str) -> tuple[ChatProvider, str]:
                 "ANTHROPIC_API_KEY is not set — add the key to opt in"
             )
         provider: ChatProvider = AnthropicChatProvider()
-        return provider, provider.resolve_model(requested)
+        return provider, provider.resolve_model(requested), "anthropic"
 
     provider = get_chat_provider(settings.chat_provider)
     model = provider.resolve_model(requested)
     enforce_free(model)
-    return provider, model
+    return provider, model, settings.chat_provider

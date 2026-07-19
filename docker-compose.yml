@@ -80,6 +80,16 @@ services:
       api:
         condition: service_healthy
 
+  # Local models (octo/local-*): opt-in per host via COMPOSE_PROFILES=local-llm
+  # in .env + OLLAMA_BASE_URL=http://ollama:11434 (treco runs this; see ADR-0009)
+  ollama:
+    image: ollama/ollama:latest
+    profiles: ["local-llm"]
+    volumes:
+      - ollama-data:/root/.ollama
+    restart: unless-stopped
+
 volumes:
   pgdata:
   openwebui-data:
+  ollama-data:

@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from octo import chat
 from octo.api.auth import require_chat_token
+from octo.providers.ollama import OllamaUnavailable
 from octo.providers.openrouter import PaidModelRefused, ProviderError, QuotaExceeded
 
 log = logging.getLogger("octo.api.chat")
@@ -79,7 +80,7 @@ async def send_message(conversation_id: str, body: MessageRequest, request: Requ
             return await chat.send(pool, registry, conversation_id, body.content, tags=body.tags)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except PaidModelRefused as exc:
+    except (PaidModelRefused, OllamaUnavailable) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except QuotaExceeded as exc:
         raise HTTPException(status_code=429, detail=str(exc)) from exc

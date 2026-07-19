@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     chat_tools_enabled: bool = True  # global kill switch for the core tool loop
     # prefix answers with the actual routed model when the request used octo/auto
     chat_show_routed_model: bool = True
+    # Local models via Ollama (octo/local-*): empty = disabled on this host.
+    # In compose with the 'local-llm' profile: http://ollama:11434
+    ollama_base_url: str = ""
     # Telemetry (ADR-0008): spans are a no-op until an OTLP endpoint is set
     otel_exporter_otlp_endpoint: str = ""
     otel_service_name: str = "agentic-octopus"

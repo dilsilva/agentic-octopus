@@ -15,6 +15,7 @@ from octo.api.auth import require_chat_token
 from octo.config import settings
 from octo.providers.base import get_chat_provider, route_chat_model
 from octo.providers.claude import CLAUDE_MODEL
+from octo.providers.ollama import OllamaUnavailable, installed_tags, virtual_name
 from octo.providers.openrouter import AUTO_MODEL, PaidModelRefused, QuotaExceeded
 from octo.telemetry import llm_span, merge_tags, parse_tags_header
 
@@ -62,6 +63,7 @@ async def list_models():
     models = [AUTO_MODEL]
     if settings.anthropic_key_set:
         models.append(CLAUDE_MODEL)
+    models.extend(virtual_name(t) for t in await installed_tags())  # octo/local-*
     models.extend(await provider.list_models())
     return {"object": "list", "data": [{"id": m, "object": "model"} for m in models]}
 
@@ -70,14 +72,16 @@ async def list_models():
 async def chat_completions(request: Request):
     body = await request.json()
     try:
-        provider, model = route_chat_model(body.get("model") or "default")
+        provider, model, provider_name = await route_chat_model(body.get("model") or "default")
     except PaidModelRefused as exc:
+        return _openai_error(400, str(exc), "invalid_request_error")
+    except OllamaUnavailable as exc:
         return _openai_error(400, str(exc), "invalid_request_error")
     body["model"] = model
     tags = merge_tags(
         {
             "surface": "openai-compat",
-            "provider": settings.chat_provider,
+            "provider": provider_name,
             "routed": model == AUTO_MODEL,
         },
         parse_tags_header(request.headers.get("x-octo-tags")),
@@ -96,7 +100,7 @@ async def chat_completions(request: Request):
 
     if not body.get("stream"):
         async with llm_span(
-            "openai_compat", provider=settings.chat_provider, requested_model=model, tags=tags
+            "openai_compat", provider=provider_name, requested_model=model, tags=tags
         ) as obs:
             try:
                 r = await provider.complete(body)

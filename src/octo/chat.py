@@ -23,8 +23,8 @@ from psycopg.types.json import Jsonb
 from psycopg_pool import AsyncConnectionPool
 
 from octo.config import settings
-from octo.providers.base import get_chat_provider
-from octo.providers.openrouter import AUTO_MODEL, enforce_free
+from octo.providers.base import route_chat_model
+from octo.providers.openrouter import AUTO_MODEL
 from octo.registry import LoadedAgent
 from octo.telemetry import llm_span, merge_tags
 from octo.tools import TOOL_REGISTRY, run_tool
@@ -215,13 +215,20 @@ async def _prepare(
     convo = await get_conversation(pool, conversation_id)
     if convo is None:
         raise LookupError(f"conversation {conversation_id} not found")
-    provider = get_chat_provider(settings.chat_provider)
-    model = provider.resolve_model(convo["model"] or "default")
-    enforce_free(model)  # OpenRouter billing policy (cost guard)
+    # one routing seam for every surface: octo/local-* -> ollama, octo/claude ->
+    # anthropic (key-gated), everything else -> chat_provider under the :free guard
+    provider, model, provider_name = await route_chat_model(convo["model"] or "default")
     await _append(pool, conversation_id, "user", user_text)
     history = await get_messages(pool, conversation_id)
     context = build_context(system_prompt_for(convo["persona"], registry), history)
-    return model, context, tools_for(convo["persona"], registry), convo["persona"]
+    return (
+        provider,
+        provider_name,
+        model,
+        context,
+        tools_for(convo["persona"], registry),
+        convo["persona"],
+    )
 
 
 async def _execute_tool_round(
@@ -268,10 +275,9 @@ async def send(
     user_text: str,
     tags: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    model, context, allowed_tools, persona = await _prepare(
+    provider, provider_name, model, context, allowed_tools, persona = await _prepare(
         pool, registry, conversation_id, user_text
     )
-    provider = get_chat_provider(settings.chat_provider)
     started = time.monotonic()
     usage: dict[str, Any] = {}
     actual_model = model
@@ -279,7 +285,7 @@ async def send(
     all_tags = merge_tags(
         {
             "surface": "native",
-            "provider": settings.chat_provider,
+            "provider": provider_name,
             "persona": persona,
             "conversation": conversation_id,
             "routed": model == AUTO_MODEL,
@@ -288,7 +294,7 @@ async def send(
     )
     tool_rounds = 0
     async with llm_span(
-        "chat", provider=settings.chat_provider, requested_model=model, tags=all_tags
+        "chat", provider=provider_name, requested_model=model, tags=all_tags
     ) as obs:
         for round_no in range(settings.chat_max_tool_calls + 1):
             r = await provider.complete({"model": model, "messages": context})
@@ -373,15 +379,14 @@ async def send_stream(
     each round — if they start with TOOL_CALL it's a tool round (never shown),
     otherwise flush and stream live. Partial replies on disconnect are persisted
     with metadata.truncated (the finally block runs on generator aclose())."""
-    model, context, allowed_tools, persona = await _prepare(
+    provider, provider_name, model, context, allowed_tools, persona = await _prepare(
         pool, registry, conversation_id, user_text
     )
-    provider = get_chat_provider(settings.chat_provider)
     started = time.monotonic()
     all_tags = merge_tags(
         {
             "surface": "native",
-            "provider": settings.chat_provider,
+            "provider": provider_name,
             "persona": persona,
             "conversation": conversation_id,
             "routed": model == AUTO_MODEL,

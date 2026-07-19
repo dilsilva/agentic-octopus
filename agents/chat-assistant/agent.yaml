@@ -5,6 +5,7 @@ name: chat-assistant
 description: Default research-assistant persona for spine chat conversations
 executor: openrouter
 model: default
+tools: [web_search, fetch_page]   # core tool loop (chat.py prompted protocol)
 max_turns: 1                # personas are single-response; turn logic lives in the chat service
 requires_approval: false    # chat is read-only conversation
 output:

@@ -23,6 +23,7 @@ already, cloud later without redesign.
 | Consent gates — a run parks until you `octo approve` (never auto-approved) | ✅ |
 | Cron scheduler (DB-backed, exactly-once) — e.g. daily research brief | ✅ |
 | Chat: terminal (`octo chat`), web (Open WebUI :3000), raw HTTP — one shared core | ✅ |
+| Chat web research: core tool loop (DuckDuckGo search + page fetch, cited answers) | ✅ |
 | Smart model router `octo/auto` — server-side failover across healthy **free** models | ✅ |
 | Cost guard — non-free models refused unless explicitly opted in (`octo/claude`) | ✅ |
 | Webhooks · Telegram approvals · GCP deploy · semantic memory | roadmap (RFC-0001) |

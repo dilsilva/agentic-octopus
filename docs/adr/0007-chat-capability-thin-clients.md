@@ -45,9 +45,10 @@ chat UIs receive — they can converse but not drive agents.
   1. Open WebUI keeps its own conversation history inside its volume; those chats are NOT
      in the spine's Postgres (only request metadata via `chat_completions`). P5 semantic
      memory will see native-chat history only.
-  2. Open WebUI's built-in web search is a *temporary UI-side capability exception* — the
-     named fast-follow is a core chat tool loop (`messages.role='tool'` + `metadata` are
-     already in the schema for it), after which UI-side search becomes redundant.
+  2. ~~Open WebUI's built-in web search is a *temporary UI-side capability exception*~~
+     **Resolved 2026-07-19 (v0.5.0):** the core tool loop shipped (prompted protocol in
+     `chat.py` + `octo/tools/`); every surface now has web search. Open WebUI's own
+     search toggle is redundant for native-model use and may be disabled.
   3. `/v1` is a protocol namespace (OpenAI-compat), NOT a version of our API — native
      routes stay unversioned; never mint a `/v2`.
 - Follow-ups: core web-search tool loop; rolling summarization into

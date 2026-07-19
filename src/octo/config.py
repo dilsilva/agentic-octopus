@@ -38,6 +38,11 @@ class Settings(BaseSettings):
     octo_chat_token: str = ""
     chat_provider: str = "openrouter"
     chat_context_budget: int = 8000  # est. tokens for the sliding context window
+    chat_tools_enabled: bool = True  # global kill switch for the core tool loop
+    # prefix answers with the actual routed model when the request used octo/auto
+    chat_show_routed_model: bool = True
+    # each tool round costs one extra model request (free tier: 50/day) — keep low
+    chat_max_tool_calls: int = 2
     octo_api_url: str = "http://localhost:8000"
     octo_env: str = "local"
     log_level: str = "info"

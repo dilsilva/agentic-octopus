@@ -190,6 +190,11 @@ def _print_stream(resp: httpx.Response) -> None:
         if chunk.get("error"):
             typer.echo(f"\n[error] {chunk['error']}")
             return
+        if chunk.get("tool_status"):
+            ts = chunk["tool_status"]
+            typer.echo(f"\n[{ts['tool']}: {json.dumps(ts['args'])[:80]}]")
+            typer.echo("octo > ", nl=False)
+            continue
         if chunk.get("done"):
             continue
         delta = (chunk.get("choices") or [{}])[0].get("delta", {})

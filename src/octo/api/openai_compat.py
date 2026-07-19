@@ -89,6 +89,12 @@ async def chat_completions(request: Request):
             return _openai_error(429, str(exc), "rate_limit_error")
         duration_ms = int((time.monotonic() - started) * 1000)
         data = r.json()
+        if r.status_code == 200 and model == AUTO_MODEL and settings.chat_show_routed_model:
+            try:  # answer leads with who actually answered (smart routing is opaque otherwise)
+                msg = data["choices"][0]["message"]
+                msg["content"] = f"`[{data.get('model', '?')}]`\n\n{msg['content']}"
+            except (KeyError, IndexError, TypeError):
+                pass
         usage = data.get("usage") if r.status_code == 200 else None
         await _log_metadata(
             request,
@@ -102,12 +108,13 @@ async def chat_completions(request: Request):
     async def sse():
         usage = {}
         actual_model = [model]
+        want_prefix = model == AUTO_MODEL and settings.chat_show_routed_model
         try:
             async with provider.stream(body) as chunks:
                 buffer = b""
                 async for raw in chunks:
                     buffer += raw
-                    # passthrough verbatim; peek for usage in parallel
+                    # passthrough; peek for usage/model, inject routed-model prefix once
                     while b"\n\n" in buffer:
                         event, buffer = buffer.split(b"\n\n", 1)
                         for line in event.split(b"\n"):
@@ -118,6 +125,13 @@ async def chat_completions(request: Request):
                                         usage.update(chunk["usage"])
                                     if chunk.get("model"):
                                         actual_model[0] = chunk["model"]
+                                    delta = (chunk.get("choices") or [{}])[0].get("delta", {})
+                                    if want_prefix and delta.get("content"):
+                                        delta["content"] = (
+                                            f"`[{actual_model[0]}]`\n\n{delta['content']}"
+                                        )
+                                        event = b"data: " + json.dumps(chunk).encode()
+                                        want_prefix = False
                                 except json.JSONDecodeError:
                                     pass
                         yield event + b"\n\n"

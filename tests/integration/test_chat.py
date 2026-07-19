@@ -23,6 +23,7 @@ def registry():
 @pytest.fixture(autouse=True)
 def api_key(monkeypatch):
     monkeypatch.setattr(settings, "openrouter_api_key", "test-key")
+    monkeypatch.setattr(settings, "chat_show_routed_model", False)  # tested separately
 
 
 def mock_reply(text="hello there", usage=None):

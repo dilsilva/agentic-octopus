@@ -50,6 +50,25 @@ def test_completions_passthrough(client_without_db):
 
 
 @respx.mock
+def test_auto_routing_prefixes_actual_model(client_without_db, monkeypatch):
+    monkeypatch.setattr(settings, "chat_show_routed_model", True)
+    monkeypatch.setattr(settings, "openrouter_preferred_models", "a/b:free")
+    respx.post(OR_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={"model": "a/b:free", "choices": [{"message": {"content": "hi"}}]},
+        )
+    )
+    r = client_without_db.post(
+        "/v1/chat/completions",
+        json={"model": "octo/auto", "messages": [{"role": "user", "content": "hey"}]},
+        headers=AUTH,
+    )
+    assert r.status_code == 200
+    assert r.json()["choices"][0]["message"]["content"] == "`[a/b:free]`\n\nhi"
+
+
+@respx.mock
 def test_paid_model_rejected_without_upstream_call(client_without_db):
     route = respx.post(OR_URL)
     r = client_without_db.post(

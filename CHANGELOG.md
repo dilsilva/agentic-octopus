@@ -6,6 +6,22 @@ each entry says what changed and why it matters to an operator. Maintained per
 
 ## [Unreleased]
 
+## 0.5.0 — 2026-07-19 · Core web-search tool loop + routed-model transparency
+
+- **Chat can research (every surface)**: personas with `tools: [web_search, fetch_page]`
+  get a prompted tool protocol that works with ANY model the router picks (no native
+  function-calling needed — that's what free models lack). The service detects
+  `TOOL_CALL`, runs DuckDuckGo search / page fetch (free, keyless), records an audit
+  row (`role='tool'` + metadata), feeds results back, and loops (bounded by
+  `CHAT_MAX_TOOL_CALLS`, default 2 — each round costs one free-tier request).
+  Streaming hides tool rounds behind `tool_status` events and streams the final,
+  cited answer. Resolves ADR-0007's "search only in Open WebUI" exception.
+- **Routed-model prefix**: answers served via `octo/auto` lead with
+  `` `[actual-model]` `` on both surfaces (`CHAT_SHOW_ROUTED_MODEL` to disable) —
+  smart routing is no longer opaque.
+- `octo chat` shows live tool activity (`[web_search: {...}]`); `/chat/usage` counts
+  tool rounds toward the daily free-tier burn.
+
 ## 0.4.0 — 2026-07-18 · Smart routing, octo/claude, first remote deployment
 
 - **`octo/auto` smart router**: virtual model that expands to OpenRouter's native

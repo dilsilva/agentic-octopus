@@ -3,6 +3,26 @@
 Cross-session log of actions and decisions, newest first. Facts live in topic docs/RFCs/ADRs;
 this records what we did, decided, and parked. Conventions: skills/worklog.
 
+## 2026-07-19
+
+- **NEXT UP:** request tagging + observability layer — Diego wants (a) tags/labels on
+  every model request (both providers) for data analysis, (b) probably OTEL or
+  equivalent, via a maintainable library seam. Recommendation drafted (OTEL SDK behind
+  a thin `octo/telemetry.py` seam + `tags jsonb` on chat_completions; Langfuse as the
+  LLM-native viewer candidate since it ingests OTEL) — awaiting Diego's direction, then
+  ADR-0008.
+- **v0.5.0 shipped — core web-search tool loop (ADR-0007 exception resolved):**
+  `octo/tools/` (web_search via ddgs/DuckDuckGo, fetch_page via httpx+bs4 — failures are
+  data, never exceptions); prompted TOOL_CALL protocol in chat.py works with any :free
+  model (no native function calling required); bounded loop (CHAT_MAX_TOOL_CALLS=2,
+  each round = one free-tier request); role='tool' audit rows with call+result metadata;
+  streaming holds back first chars to hide tool rounds, emits tool_status events, streams
+  the final cited answer. **Live proof:** asked for latest k8s release → model searched,
+  fetched kubernetes.io, answered v1.36.2 with citation (far past its cutoff).
+- **Routed-model prefix (Diego's request):** `octo/auto` answers now lead with
+  `[actual-model]` on native chat AND /v1 shim (config CHAT_SHOW_ROUTED_MODEL);
+  routing is transparent. 103/103 tests.
+
 ## 2026-07-18
 
 - **Docs overhaul + documentation contract (v0.4.0):** README rewritten to current

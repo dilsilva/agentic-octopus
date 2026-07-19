@@ -6,6 +6,18 @@ each entry says what changed and why it matters to an operator. Maintained per
 
 ## [Unreleased]
 
+## 0.7.0 — 2026-07-19 · Local models: octo/local-* via Ollama (ChatProvider #3)
+
+- **`octo/local-<name>` virtual models** route to a per-host Ollama instance
+  (OpenAI-compatible API): unlimited, private, offline, $0. Opt-in per host via the
+  compose `local-llm` profile + `OLLAMA_BASE_URL` in `.env`; disabled hosts refuse
+  with a clear message. Installed models auto-appear in `/v1/models` (Open WebUI
+  picker) as e.g. `octo/local-qwen3.5-4b`.
+- **Unified routing**: `route_chat_model()` now serves every surface — `octo/claude`
+  and `octo/local-*` work in `octo chat` and raw HTTP too, not just the web UI.
+- Deployed on treco with `qwen3.5:4b` (daily driver, ~5-8 tok/s) and `qwen3.5:9b`
+  (quality tier, ~3-7 tok/s) per the sized shortlist.
+
 ## 0.6.0 — 2026-07-19 · Request tagging + telemetry seam (ADR-0008)
 
 - **Every model request is tagged** for data analysis: auto-derived facts (surface,

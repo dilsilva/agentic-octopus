@@ -26,6 +26,7 @@ already, cloud later without redesign.
 | Chat web research: core tool loop (DuckDuckGo search + page fetch, cited answers) | ✅ |
 | Smart model router `octo/auto` — server-side failover across healthy **free** models | ✅ |
 | Cost guard — non-free models refused unless explicitly opted in (`octo/claude`) | ✅ |
+| Local models — `octo/local-*` via Ollama (per-host opt-in; private, offline, $0) | ✅ |
 | Webhooks · Telegram approvals · GCP deploy · semantic memory | roadmap (RFC-0001) |
 
 ## Quick start

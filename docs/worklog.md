@@ -5,6 +5,14 @@ this records what we did, decided, and parked. Conventions: skills/worklog.
 
 ## 2026-07-19
 
+- **v0.7.0 shipped — local models (octo/local-*) via Ollama, deployed on treco:**
+  `providers/ollama.py` (ChatProvider #3, OpenAI-compat passthrough, installed-tags
+  discovery); per-host opt-in = compose `local-llm` profile + `OLLAMA_BASE_URL` in .env
+  (treco: enabled; Mac: not). `route_chat_model()` now async, returns provider_name,
+  and serves ALL surfaces — octo/claude + octo/local-* work in native chat/CLI too.
+  treco pulled `qwen3.5:4b` (daily driver) + `qwen3.5:9b` (quality tier — newer gen
+  than the shortlist's qwen2.5-7b, same RAM class). Models auto-appear in Open WebUI
+  picker. 114/114 tests.
 - **v0.6.0 shipped — tagging + telemetry seam (ADR-0008, accepted):**
   `octo/telemetry.py` is the only OTEL-aware module; tags dual-written (jsonb+GIN on
   messages/chat_completions/runs via migration 0003 + `octo.tag.*` span attributes,

@@ -26,6 +26,7 @@ from octo.config import settings
 from octo.providers.base import get_chat_provider
 from octo.providers.openrouter import AUTO_MODEL, enforce_free
 from octo.registry import LoadedAgent
+from octo.telemetry import llm_span, merge_tags
 from octo.tools import TOOL_REGISTRY, run_tool
 
 log = logging.getLogger("octo.chat")
@@ -187,7 +188,7 @@ async def _append(
     vals: list[Any] = [conversation_id, role, content]
     for k, v in fields.items():
         cols.append(k)
-        vals.append(Jsonb(v) if k == "metadata" else v)
+        vals.append(Jsonb(v) if k in ("metadata", "tags") else v)
     placeholders = ", ".join(["%s"] * len(cols))
     async with pool.connection() as conn:
         cur = conn.cursor(row_factory=dict_row)
@@ -220,7 +221,7 @@ async def _prepare(
     await _append(pool, conversation_id, "user", user_text)
     history = await get_messages(pool, conversation_id)
     context = build_context(system_prompt_for(convo["persona"], registry), history)
-    return model, context, tools_for(convo["persona"], registry)
+    return model, context, tools_for(convo["persona"], registry), convo["persona"]
 
 
 async def _execute_tool_round(
@@ -265,30 +266,54 @@ async def send(
     registry: dict[str, LoadedAgent],
     conversation_id: str,
     user_text: str,
+    tags: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    model, context, allowed_tools = await _prepare(pool, registry, conversation_id, user_text)
+    model, context, allowed_tools, persona = await _prepare(
+        pool, registry, conversation_id, user_text
+    )
     provider = get_chat_provider(settings.chat_provider)
     started = time.monotonic()
     usage: dict[str, Any] = {}
     actual_model = model
     content = ""
-    for round_no in range(settings.chat_max_tool_calls + 1):
-        r = await provider.complete({"model": model, "messages": context})
-        if r.status_code != 200:
-            raise RuntimeError(f"provider error {r.status_code}: {r.text[:300]}")
-        data = r.json()
-        if data.get("error"):
-            raise RuntimeError(f"provider error: {str(data['error'])[:300]}")
-        content = data["choices"][0]["message"]["content"]
-        usage = data.get("usage") or usage
-        actual_model = data.get("model") or actual_model
-        call = parse_tool_call(content) if allowed_tools else None
-        if call is None or round_no >= settings.chat_max_tool_calls:
-            break
-        tool, args = call
-        log.info("chat %s tool round %d: %s(%s)", conversation_id, round_no + 1, tool, args)
-        await _execute_tool_round(
-            pool, conversation_id, context, content, tool, args, allowed_tools
+    all_tags = merge_tags(
+        {
+            "surface": "native",
+            "provider": settings.chat_provider,
+            "persona": persona,
+            "conversation": conversation_id,
+            "routed": model == AUTO_MODEL,
+        },
+        tags,
+    )
+    tool_rounds = 0
+    async with llm_span(
+        "chat", provider=settings.chat_provider, requested_model=model, tags=all_tags
+    ) as obs:
+        for round_no in range(settings.chat_max_tool_calls + 1):
+            r = await provider.complete({"model": model, "messages": context})
+            if r.status_code != 200:
+                raise RuntimeError(f"provider error {r.status_code}: {r.text[:300]}")
+            data = r.json()
+            if data.get("error"):
+                raise RuntimeError(f"provider error: {str(data['error'])[:300]}")
+            content = data["choices"][0]["message"]["content"]
+            usage = data.get("usage") or usage
+            actual_model = data.get("model") or actual_model
+            call = parse_tool_call(content) if allowed_tools else None
+            if call is None or round_no >= settings.chat_max_tool_calls:
+                break
+            tool, args = call
+            tool_rounds += 1
+            log.info("chat %s tool round %d: %s(%s)", conversation_id, round_no + 1, tool, args)
+            await _execute_tool_round(
+                pool, conversation_id, context, content, tool, args, allowed_tools
+            )
+        obs.update(
+            actual_model=actual_model,
+            prompt_tokens=usage.get("prompt_tokens"),
+            completion_tokens=usage.get("completion_tokens"),
+            tool_rounds=tool_rounds,
         )
     return await _append(
         pool,
@@ -299,6 +324,7 @@ async def send(
         prompt_tokens=usage.get("prompt_tokens"),
         completion_tokens=usage.get("completion_tokens"),
         duration_ms=int((time.monotonic() - started) * 1000),
+        tags=all_tags,
     )
 
 
@@ -340,15 +366,29 @@ async def send_stream(
     registry: dict[str, LoadedAgent],
     conversation_id: str,
     user_text: str,
+    tags: dict[str, Any] | None = None,
 ) -> AsyncIterator[dict[str, Any]]:
     """Streams the final answer as OpenAI-style chunks; tool rounds surface as
     {'tool_status': ...} events. Detection trick: hold back the first few chars of
     each round — if they start with TOOL_CALL it's a tool round (never shown),
     otherwise flush and stream live. Partial replies on disconnect are persisted
     with metadata.truncated (the finally block runs on generator aclose())."""
-    model, context, allowed_tools = await _prepare(pool, registry, conversation_id, user_text)
+    model, context, allowed_tools, persona = await _prepare(
+        pool, registry, conversation_id, user_text
+    )
     provider = get_chat_provider(settings.chat_provider)
     started = time.monotonic()
+    all_tags = merge_tags(
+        {
+            "surface": "native",
+            "provider": settings.chat_provider,
+            "persona": persona,
+            "conversation": conversation_id,
+            "routed": model == AUTO_MODEL,
+            "stream": True,
+        },
+        tags,
+    )
     usage: dict[str, Any] = {}
     actual_model = [model]
     parts: list[str] = []
@@ -433,6 +473,7 @@ async def send_stream(
                 completion_tokens=usage.get("completion_tokens"),
                 duration_ms=int((time.monotonic() - started) * 1000),
                 metadata={} if completed else {"truncated": True},
+                tags=all_tags,
             )
             if completed:
                 yield {"done": True, "message_id": msg["id"], "usage": usage}

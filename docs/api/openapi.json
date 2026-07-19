@@ -10,7 +10,7 @@
     "license": {
       "name": "Private"
     },
-    "version": "0.5.0"
+    "version": "0.6.0"
   },
   "paths": {
     "/agents": {
@@ -935,6 +935,12 @@
             "type": "boolean",
             "title": "Stream",
             "default": false
+          },
+          "tags": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Tags",
+            "default": {}
           }
         },
         "type": "object",
@@ -949,6 +955,12 @@
             "additionalProperties": true,
             "type": "object",
             "title": "Params",
+            "default": {}
+          },
+          "tags": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Tags",
             "default": {}
           }
         },

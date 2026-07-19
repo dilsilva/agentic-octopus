@@ -23,13 +23,14 @@ async def enqueue(
     params: dict | None = None,
     schedule_id: str | None = None,
     max_attempts: int = 1,
+    tags: dict | None = None,
 ) -> str:
     async with pool.connection() as conn:
         row = await (
             await conn.execute(
-                "INSERT INTO runs (agent, trigger, params, schedule_id, max_attempts) "
-                "VALUES (%s, %s, %s, %s, %s) RETURNING id",
-                (agent, trigger, Jsonb(params or {}), schedule_id, max_attempts),
+                "INSERT INTO runs (agent, trigger, params, schedule_id, max_attempts, tags) "
+                "VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
+                (agent, trigger, Jsonb(params or {}), schedule_id, max_attempts, Jsonb(tags or {})),
             )
         ).fetchone()
         run_id = str(row[0])

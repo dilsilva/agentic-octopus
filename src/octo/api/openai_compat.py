@@ -16,6 +16,7 @@ from octo.config import settings
 from octo.providers.base import get_chat_provider, route_chat_model
 from octo.providers.claude import CLAUDE_MODEL
 from octo.providers.openrouter import AUTO_MODEL, PaidModelRefused, QuotaExceeded
+from octo.telemetry import llm_span, merge_tags, parse_tags_header
 
 log = logging.getLogger("octo.api.v1")
 
@@ -29,16 +30,18 @@ def _openai_error(status: int, message: str, err_type: str) -> JSONResponse:
     )
 
 
-async def _log_metadata(request: Request, *, model, usage, duration_ms, stream) -> None:
+async def _log_metadata(request: Request, *, model, usage, duration_ms, stream, tags=None) -> None:
     pool = request.app.state.pool
     if pool is None:
         return  # degrade gracefully — the shim still answers without a DB
     usage = usage or {}
+    from psycopg.types.json import Jsonb
+
     async with pool.connection() as conn:
         await conn.execute(
             "INSERT INTO chat_completions "
-            "(model, prompt_tokens, completion_tokens, total_tokens, duration_ms, stream) "
-            "VALUES (%s, %s, %s, %s, %s, %s)",
+            "(model, prompt_tokens, completion_tokens, total_tokens, duration_ms, stream, tags) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s)",
             (
                 model,
                 usage.get("prompt_tokens"),
@@ -46,6 +49,7 @@ async def _log_metadata(request: Request, *, model, usage, duration_ms, stream) 
                 usage.get("total_tokens"),
                 duration_ms,
                 stream,
+                Jsonb(tags or {}),
             ),
         )
 
@@ -70,6 +74,14 @@ async def chat_completions(request: Request):
     except PaidModelRefused as exc:
         return _openai_error(400, str(exc), "invalid_request_error")
     body["model"] = model
+    tags = merge_tags(
+        {
+            "surface": "openai-compat",
+            "provider": settings.chat_provider,
+            "routed": model == AUTO_MODEL,
+        },
+        parse_tags_header(request.headers.get("x-octo-tags")),
+    )
     # Shim contract (ADR-0007): plain completions only. Clients like Open WebUI may
     # inject tools (e.g. get_current_timestamp); many :free models have no tool-capable
     # endpoint and OpenRouter then 404s. Tool use arrives with the core tool loop.
@@ -83,10 +95,14 @@ async def chat_completions(request: Request):
     started = time.monotonic()
 
     if not body.get("stream"):
-        try:
-            r = await provider.complete(body)
-        except QuotaExceeded as exc:
-            return _openai_error(429, str(exc), "rate_limit_error")
+        async with llm_span(
+            "openai_compat", provider=settings.chat_provider, requested_model=model, tags=tags
+        ) as obs:
+            try:
+                r = await provider.complete(body)
+            except QuotaExceeded as exc:
+                obs["error"] = "quota"
+                return _openai_error(429, str(exc), "rate_limit_error")
         duration_ms = int((time.monotonic() - started) * 1000)
         data = r.json()
         if r.status_code == 200 and model == AUTO_MODEL and settings.chat_show_routed_model:
@@ -96,12 +112,18 @@ async def chat_completions(request: Request):
             except (KeyError, IndexError, TypeError):
                 pass
         usage = data.get("usage") if r.status_code == 200 else None
+        obs.update(
+            actual_model=data.get("model"),
+            prompt_tokens=(usage or {}).get("prompt_tokens"),
+            completion_tokens=(usage or {}).get("completion_tokens"),
+        )
         await _log_metadata(
             request,
             model=data.get("model") or model,  # actual routed model, not 'octo/auto'
             usage=usage,
             duration_ms=duration_ms,
             stream=False,
+            tags=tags,
         )
         return JSONResponse(status_code=r.status_code, content=data)
 
@@ -148,6 +170,7 @@ async def chat_completions(request: Request):
                 usage=usage,
                 duration_ms=int((time.monotonic() - started) * 1000),
                 stream=True,
+                tags=tags,
             )
 
     return StreamingResponse(sse(), media_type="text/event-stream")

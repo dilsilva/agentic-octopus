@@ -6,6 +6,16 @@ each entry says what changed and why it matters to an operator. Maintained per
 
 ## [Unreleased]
 
+## 0.6.0 — 2026-07-19 · Request tagging + telemetry seam (ADR-0008)
+
+- **Every model request is tagged** for data analysis: auto-derived facts (surface,
+  provider, model, persona/agent, routed, trigger) merged with your categories —
+  API `tags` fields, CLI `--tag k=v`, or `X-Octo-Tags` header. Dual-written:
+  Postgres `tags jsonb` (GIN-indexed on messages/chat_completions/runs — SQL analysis
+  with zero infra) + OTEL spans (GenAI semantic conventions) via the
+  `octo/telemetry.py` seam — a no-op until `OTEL_EXPORTER_OTLP_ENDPOINT` is set.
+- Langfuse (OTLP-ingesting, self-hostable) is the planned viewer on treco.
+
 ## 0.5.0 — 2026-07-19 · Core web-search tool loop + routed-model transparency
 
 - **Chat can research (every surface)**: personas with `tools: [web_search, fetch_page]`

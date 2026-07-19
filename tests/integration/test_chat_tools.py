@@ -117,6 +117,20 @@ def sse_response(text):
 
 
 @respx.mock
+async def test_tags_persisted_on_assistant_message(pool, registry):
+    respx.post(OR_URL).mock(return_value=completion("hi"))
+    convo = await chat.create_conversation(pool)
+    reply = await chat.send(
+        pool, registry, str(convo["id"]), "hello", tags={"topic": "infra", "surface": "cli"}
+    )
+    tags = reply["tags"]
+    assert tags["topic"] == "infra"  # manual category
+    assert tags["surface"] == "cli"  # manual overrides auto
+    assert tags["persona"] == "chat-assistant"  # auto-derived
+    assert tags["provider"] == "openrouter"
+
+
+@respx.mock
 async def test_routed_model_prefix_on_auto(pool, registry, monkeypatch):
     monkeypatch.setattr(settings, "chat_show_routed_model", True)
     monkeypatch.setattr(settings, "openrouter_default_model", "octo/auto")

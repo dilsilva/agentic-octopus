@@ -42,6 +42,7 @@ async def list_agents(request: Request):
 
 class RunRequest(BaseModel):
     params: dict = {}
+    tags: dict = {}  # caller categories for data analysis (ADR-0008)
 
 
 @router.post(
@@ -50,7 +51,9 @@ class RunRequest(BaseModel):
 async def run_agent(name: str, body: RunRequest, request: Request):
     if name not in request.app.state.registry:
         raise HTTPException(status_code=404, detail=f"unknown agent '{name}'")
-    run_id = await queue.enqueue(_pool(request), name, trigger="api", params=body.params)
+    run_id = await queue.enqueue(
+        _pool(request), name, trigger="api", params=body.params, tags=body.tags
+    )
     return {"run_id": run_id, "status": "queued"}
 
 

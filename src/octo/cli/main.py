@@ -25,6 +25,15 @@ def _echo(data) -> None:
     typer.echo(json.dumps(data, indent=2, default=str))
 
 
+def _parse_tags(pairs: list[str]) -> dict:
+    tags = {}
+    for p in pairs:
+        k, _, v = p.partition("=")
+        if k:
+            tags[k] = v
+    return tags
+
+
 @app.command()
 def health() -> None:
     """Check the API's health endpoint."""
@@ -46,6 +55,7 @@ def agents() -> None:
 def run(
     agent: str,
     param: list[str] = typer.Option([], "--param", "-p", help="k=v, repeatable"),
+    tag: list[str] = typer.Option([], "--tag", "-t", help="k=v analysis tag, repeatable"),
     follow: bool = typer.Option(False, "--follow", "-f", help="poll until the run finishes"),
 ) -> None:
     """Trigger an agent run."""
@@ -54,7 +64,7 @@ def run(
         k, _, v = p.partition("=")
         params[k] = v
     with _client() as c:
-        r = c.post(f"/agents/{agent}/run", json={"params": params})
+        r = c.post(f"/agents/{agent}/run", json={"params": params, "tags": _parse_tags(tag)})
         r.raise_for_status()
         run_id = r.json()["run_id"]
         typer.echo(f"run_id: {run_id}")
@@ -207,6 +217,7 @@ def chat_repl(
     ctx: typer.Context,
     conversation: str | None = typer.Option(None, "--conversation", "-c", help="resume by id"),
     persona: str | None = typer.Option(None, "--persona"),
+    tag: list[str] = typer.Option([], "--tag", "-t", help="k=v analysis tag, repeatable"),
 ) -> None:
     """Interactive chat. Commands inside: /new, /list, /quit."""
     if ctx.invoked_subcommand is not None:
@@ -237,7 +248,11 @@ def chat_repl(
             with c.stream(
                 "POST",
                 f"/chat/conversations/{conversation}/messages",
-                json={"content": text, "stream": True},
+                json={
+                    "content": text,
+                    "stream": True,
+                    "tags": {"surface": "cli", **_parse_tags(tag)},
+                },
                 timeout=300,
             ) as resp:
                 if resp.status_code != 200:

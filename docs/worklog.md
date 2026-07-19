@@ -5,7 +5,18 @@ this records what we did, decided, and parked. Conventions: skills/worklog.
 
 ## 2026-07-19
 
-- **NEXT UP:** request tagging + observability layer — Diego wants (a) tags/labels on
+- **v0.6.0 shipped — tagging + telemetry seam (ADR-0008, accepted):**
+  `octo/telemetry.py` is the only OTEL-aware module; tags dual-written (jsonb+GIN on
+  messages/chat_completions/runs via migration 0003 + `octo.tag.*` span attributes,
+  GenAI semconv). Auto tags: surface/provider/persona/agent/routed/trigger; manual:
+  API `tags`, CLI `--tag`, `X-Octo-Tags` header (manual wins). Spans no-op until
+  OTEL_EXPORTER_OTLP_ENDPOINT set; Langfuse on treco = planned viewer. Live-verified
+  merged tags in Postgres. 108/108 tests. Known v1 gap: streaming chat emits tags only
+  (no span) — noted in ADR.
+- **PARKED — NEXT UP candidates:** deploy Langfuse on treco + OTLP endpoint; local
+  Ollama on treco as ChatProvider #3 (model shortlist given to Diego 2026-07-19);
+  P2 webhooks + mid-run gates.
+- ~~**NEXT UP:** request tagging + observability layer~~ (done above) — Diego wants (a) tags/labels on
   every model request (both providers) for data analysis, (b) probably OTEL or
   equivalent, via a maintainable library seam. Recommendation drafted (OTEL SDK behind
   a thin `octo/telemetry.py` seam + `tags jsonb` on chat_completions; Langfuse as the

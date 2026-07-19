@@ -15,6 +15,7 @@ from octo.config import settings
 from octo.executor import AgentExecutor, ExecOutcome, get_executor
 from octo.models import RunStatus
 from octo.registry import LoadedAgent, load_registry
+from octo.telemetry import llm_span, merge_tags
 from octo.worker import scheduler
 
 log = logging.getLogger("octo.worker")
@@ -64,9 +65,22 @@ async def process_once(
                 log.warning("lost lease on run %s", run_id)
                 return
 
+    tags = merge_tags(
+        {
+            "surface": "worker",
+            "agent": m.name,
+            "executor": m.executor,
+            "trigger": run["trigger"],
+        },
+        run.get("tags"),
+    )
     hb = asyncio.create_task(keep_lease())
     try:
-        outcome = await executor.execute(run, agent, workdir, on_event)
+        async with llm_span(
+            "agent_run", provider=m.executor, requested_model=m.model, tags=tags
+        ) as obs:
+            outcome = await executor.execute(run, agent, workdir, on_event)
+            obs.update(actual_model=outcome.model, error=outcome.error)
     except Exception as exc:  # executor bugs must not kill the worker
         log.exception("executor crashed on run %s", run_id)
         outcome = ExecOutcome(status="failed", error=repr(exc))
@@ -82,6 +96,12 @@ async def process_once(
         cost_usd=outcome.cost_usd,
         session_id=outcome.session_id,
     )
+    if outcome.model:
+        tags["model"] = outcome.model
+    async with pool.connection() as conn:
+        from psycopg.types.json import Jsonb
+
+        await conn.execute("UPDATE runs SET tags = %s WHERE id = %s", (Jsonb(tags), run_id))
     log.info("run %s %s (agent=%s cost=%s)", run_id, outcome.status, m.name, outcome.cost_usd)
     return True
 

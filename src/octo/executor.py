@@ -22,6 +22,7 @@ class ExecOutcome:
     error: str | None = None
     cost_usd: float | None = None
     session_id: str | None = None
+    model: str | None = None  # actual model that served (tags/telemetry, ADR-0008)
 
 
 class AgentExecutor(Protocol):
@@ -95,6 +96,7 @@ class ClaudeSDKExecutor:
                     error=None if ok else f"sdk result subtype: {message.subtype}",
                     cost_usd=message.total_cost_usd,
                     session_id=message.session_id,
+                    model=m.model if m.model != "default" else "claude-sdk-default",
                 )
         return outcome
 
@@ -171,6 +173,7 @@ class OpenRouterExecutor:
                 f"tokens={usage.get('total_tokens')})"
             ),
             cost_usd=0.0 if actual_model.endswith(":free") else None,
+            model=actual_model,
         )
 
 

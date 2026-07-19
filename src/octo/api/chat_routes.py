@@ -67,6 +67,7 @@ async def delete_conversation(conversation_id: str, request: Request):
 class MessageRequest(BaseModel):
     content: str
     stream: bool = False
+    tags: dict = {}  # caller categories for data analysis (ADR-0008)
 
 
 @router.post("/conversations/{conversation_id}/messages")
@@ -75,7 +76,7 @@ async def send_message(conversation_id: str, body: MessageRequest, request: Requ
     registry = request.app.state.registry
     try:
         if not body.stream:
-            return await chat.send(pool, registry, conversation_id, body.content)
+            return await chat.send(pool, registry, conversation_id, body.content, tags=body.tags)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except PaidModelRefused as exc:
@@ -87,7 +88,9 @@ async def send_message(conversation_id: str, body: MessageRequest, request: Requ
 
     async def sse():
         try:
-            async for chunk in chat.send_stream(pool, registry, conversation_id, body.content):
+            async for chunk in chat.send_stream(
+                pool, registry, conversation_id, body.content, tags=body.tags
+            ):
                 yield f"data: {json.dumps(chunk)}\n\n"
             yield "data: [DONE]\n\n"
         except Exception as exc:  # response already committed — emit a readable

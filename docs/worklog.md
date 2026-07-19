@@ -5,6 +5,15 @@ this records what we did, decided, and parked. Conventions: skills/worklog.
 
 ## 2026-07-19
 
+- **Single-flag local LLMs + treco verification:** Mac and treco now differ by exactly
+  ONE .env line (`COMPOSE_PROFILES=local-llm`); compose always passes OLLAMA_BASE_URL,
+  app auto-detects, disabled hosts get actionable errors (verified on Mac: clear 400,
+  no locals in picker). treco live: both models in /v1/models and Open WebUI;
+  **qwen3.5:4b answers in ~7s incl. thinking — the daily local driver.**
+  **⚠ qwen3.5:9b measured ~1.5 tok/s (3m25s for a trivial prompt)** — thinking tokens
+  + 6.6GB model beside the full stack make it the patience tier; keep for
+  quality-when-unhurried. FOLLOW-UP candidate: thinking on/off control for local
+  models (Ollama `think` param / qwen `/no_think`) would make 9b usable.
 - **v0.7.0 shipped — local models (octo/local-*) via Ollama, deployed on treco:**
   `providers/ollama.py` (ChatProvider #3, OpenAI-compat passthrough, installed-tags
   discovery); per-host opt-in = compose `local-llm` profile + `OLLAMA_BASE_URL` in .env

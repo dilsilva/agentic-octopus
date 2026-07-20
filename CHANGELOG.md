@@ -6,6 +6,9 @@ each entry says what changed and why it matters to an operator. Maintained per
 
 ## [Unreleased]
 
+- treco local lineup: `qwen3.5:9b` removed (impractical at ~1.5 tok/s beside the
+  stack); `gemma3:4b` added — fast, non-thinking, multilingual (PT-BR verified).
+
 ## 0.7.0 — 2026-07-19 · Local models: octo/local-* via Ollama (ChatProvider #3)
 
 - **`octo/local-<name>` virtual models** route to a per-host Ollama instance

@@ -3,6 +3,15 @@
 Cross-session log of actions and decisions, newest first. Facts live in topic docs/RFCs/ADRs;
 this records what we did, decided, and parked. Conventions: skills/worklog.
 
+## 2026-07-20
+
+- **Local model swap on treco (Diego: "9b is really not a good experience"):**
+  removed `qwen3.5:9b` (~1.5 tok/s, thinking-token overhead); pulled **`gemma3:4b`**
+  (3.3GB, non-thinking, strong multilingual — verified live answering in Portuguese,
+  25s cold-load / faster warm). Local lineup now: `octo/local-qwen3.5-4b` (reasoning
+  flavor) + `octo/local-gemma3-4b` (fast conversational/multilingual). Bigger option
+  if the stack ever slims: `gemma4:12b` (would repeat the 9b experience today).
+
 ## 2026-07-19
 
 - **Single-flag local LLMs + treco verification:** Mac and treco now differ by exactly

@@ -3,6 +3,27 @@
 Cross-session log of actions and decisions, newest first. Facts live in topic docs/RFCs/ADRs;
 this records what we did, decided, and parked. Conventions: skills/worklog.
 
+## 2026-07-23
+
+- **SESSION HANDOFF.**
+  1. **How to resume:** read this worklog top-down (this entry = current state), then
+     `CHANGELOG.md` for the release trail (v0.0.1→0.7.0+), `docs/rfcs/0001` for design,
+     `docs/adr/0001–0008` for decisions. `/resume` in a Claude session does this.
+  2. **State:** `main` clean and identical on GitLab (origin) + GitHub (github remote),
+     tip `db1b489`; CI green; 114/114 tests. Local Mac stack + treco deployment both
+     current (treco update: `cd ~/apps/agentic-octopus && git pull && docker compose
+     up -d --build`). No uncommitted artifacts anywhere; nothing parked in scratch.
+  3. **Open items, priority order:**
+     1. Langfuse on treco + `OTEL_EXPORTER_OTLP_ENDPOINT` — lights up the ADR-0008
+        spans; tags are already flowing to Postgres.
+     2. Thinking on/off control for local models (Ollama `think` / qwen `/no_think`)
+        — would make bigger local models usable interactively.
+     3. P2 (RFC-0001): inbound webhooks + mid-run gates via SDK session resume.
+     4. Rolling conversation summarization into `conversations.summary` (schema ready).
+     5. Housekeeping: rotate the OpenRouter key (was pasted into a chat session);
+        consider the one-time $10 OpenRouter top-up (1000 req/day + `:online` models).
+     6. P3/P4 (RFC-0001): Telegram approvals; GCP deploy (consent-gated).
+
 ## 2026-07-20
 
 - **Local model swap on treco (Diego: "9b is really not a good experience"):**
